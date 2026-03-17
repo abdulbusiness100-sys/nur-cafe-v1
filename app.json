@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "nur-cafe",
+    "slug": "nur-cafe",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#9C5148"
+    },
+    "scheme": "nurcafe",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nurcafe.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#9C5148"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.nurcafe.app"
+        }
+      ]
+    ]
+  }
+}
