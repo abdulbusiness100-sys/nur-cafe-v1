@@ -1,8 +1,8 @@
 // src/screens/OrderHistoryScreen.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  TouchableOpacity, ActivityIndicator,
+  TouchableOpacity, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,15 +37,25 @@ const STATUS_TEXT: Record<OrderStatus, string> = {
 
 export default function OrderHistoryScreen({ navigation }: Props) {
   const { user } = useAuth();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [orders, setOrders]       = useState<Order[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchOrders = useCallback(async () => {
+    if (!user) return;
+    const data = await getUserOrders(user.id).catch(() => []);
+    setOrders(data);
+  }, [user]);
 
   useEffect(() => {
-    if (!user) return;
-    getUserOrders(user.id)
-      .then(setOrders)
-      .finally(() => setLoading(false));
-  }, [user]);
+    fetchOrders().finally(() => setLoading(false));
+  }, [fetchOrders]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchOrders();
+    setRefreshing(false);
+  }, [fetchOrders]);
 
   const renderItem = ({ item: order, index }: { item: Order; index: number }) => {
     const items = order.items as OrderItem[];
@@ -118,6 +128,14 @@ export default function OrderHistoryScreen({ navigation }: Props) {
           renderItem={renderItem}
           contentContainerStyle={{ padding: spacing.base, gap: spacing.sm, paddingBottom: 32 }}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.brand}
+              colors={[colors.brand]}
+            />
+          }
         />
       )}
     </SafeAreaView>

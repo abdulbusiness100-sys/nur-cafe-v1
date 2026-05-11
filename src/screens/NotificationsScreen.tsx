@@ -1,8 +1,8 @@
 // src/screens/NotificationsScreen.tsx
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  TouchableOpacity, ActivityIndicator,
+  TouchableOpacity, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,14 +26,21 @@ export default function NotificationsScreen() {
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
     if (!user) return;
     const data = await getUserNotifications(user.id).catch(() => []);
     setNotifs(data);
-    setLoading(false);
-  };
+  }, [user]);
 
-  useEffect(() => { load(); }, [user]);
+  useEffect(() => { load().finally(() => setLoading(false)); }, [load]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }, [load]);
 
   // Realtime — prepend new notifications as they arrive
   useEffect(() => {
@@ -91,6 +98,14 @@ export default function NotificationsScreen() {
           keyExtractor={(n) => n.id}
           contentContainerStyle={{ padding: spacing.base, gap: spacing.sm, paddingBottom: 32 }}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.brand}
+              colors={[colors.brand]}
+            />
+          }
           renderItem={({ item: notif, index }) => (
             <Animated.View entering={FadeInDown.delay(index * 40).springify()}>
               <TouchableOpacity
