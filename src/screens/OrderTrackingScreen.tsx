@@ -140,7 +140,7 @@ const s = StyleSheet.create({
   headerTitle: { flex: 1, textAlign: 'center', ...t.h2, color: colors.onBrand },
 
   idRow: { alignItems: 'center', marginBottom: spacing.base },
-  idLabel: { ...t.label, color: colors.onBrand, opacity: 0.6 },
+  idLabel: { ...t.labelLg, color: colors.onBrand, opacity: 0.6 },
 
   statusCard: {
     marginHorizontal: spacing.base,
@@ -210,5 +210,5 @@ const s = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.brand,
   },
-  doneBtnText: { ...t.label, color: colors.brand },
+  doneBtnText: { ...t.labelLg, color: colors.brand },
 });

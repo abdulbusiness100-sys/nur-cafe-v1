@@ -1,69 +1,175 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+// src/components/TabBar.tsx
+// Phase 5 — Custom animated tab bar: spring icons, fade labels, indicator dot
+import { useEffect } from 'react';
+import { View, Pressable, StyleSheet } from 'react-native';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  interpolate,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import colors from '../theme/colors';
+import { fonts } from '../theme/typography';
+import { springs } from '../theme/springs';
 
-type Tab = {
-  key: string;
+// ─── Tab config ───────────────────────────────────────────────────────────────
+const TAB_CONFIG: {
+  name: string;
   label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  iconActive?: keyof typeof Ionicons.glyphMap;
-};
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  iconActive: React.ComponentProps<typeof Ionicons>['name'];
+}[] = [
+  { name: 'Home',           label: 'Home',    icon: 'home-outline',   iconActive: 'home'   },
+  { name: 'Order',          label: 'Order',   icon: 'cafe-outline',   iconActive: 'cafe'   },
+  { name: 'Loyalty',        label: 'Loyalty', icon: 'star-outline',   iconActive: 'star'   },
+  { name: 'Gifts & Wallet', label: 'Gifts',   icon: 'wallet-outline', iconActive: 'wallet' },
+];
 
-type Props = {
-  value: string;
-  onChange: (key: string) => void;
-  tabs: Tab[];
-};
+const BAR_H = 72;
 
-export default function TabBar({ value, onChange, tabs }: Props) {
-  const inset = useSafeAreaInsets();
-  const bottomPad = Math.max(inset.bottom, 8);
+// ─── Individual tab item ──────────────────────────────────────────────────────
+function TabItem({
+  config,
+  isFocused,
+  onPress,
+}: {
+  config: typeof TAB_CONFIG[0];
+  isFocused: boolean;
+  onPress: () => void;
+}) {
+  const iconScale    = useSharedValue(isFocused ? 1.12 : 1);
+  const labelOpacity = useSharedValue(isFocused ? 1 : 0);
+
+  useEffect(() => {
+    if (isFocused) {
+      iconScale.value    = withSpring(1.12, springs.tabIcon);
+      labelOpacity.value = withTiming(1, { duration: 180 });
+    } else {
+      iconScale.value    = withSpring(1.0, springs.tabIcon);
+      labelOpacity.value = withTiming(0, { duration: 130 });
+    }
+  }, [isFocused]);
+
+  const iconStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: iconScale.value }],
+  }));
+
+  const labelStyle = useAnimatedStyle(() => ({
+    opacity: labelOpacity.value,
+    transform: [{ translateY: interpolate(labelOpacity.value, [0, 1], [3, 0]) }],
+  }));
 
   return (
-    <View style={[styles.wrap, { paddingBottom: bottomPad }]}>
-      {tabs.map((t) => {
-        const active = t.key === value;
-        return (
-          <TouchableOpacity
-            key={t.key}
-            style={styles.item}
-            onPress={() => onChange(t.key)}
-            activeOpacity={0.85}
-          >
-            <Ionicons
-              name={(active ? t.iconActive : t.icon) as any}
-              size={22}
-              color={active ? colors.text : colors.muted}
+    <Pressable
+      onPress={onPress}
+      style={s.tabItem}
+      accessibilityRole="tab"
+      accessibilityLabel={config.label}
+      accessibilityState={{ selected: isFocused }}
+    >
+      <Animated.View style={iconStyle}>
+        <Ionicons
+          name={isFocused ? config.iconActive : config.icon}
+          size={22}
+          color={isFocused ? colors.terracotta : colors.muted}
+        />
+      </Animated.View>
+
+      {/* Active indicator dot */}
+      {isFocused && (
+        <Animated.View
+          entering={FadeIn.duration(150)}
+          exiting={FadeOut.duration(100)}
+          style={s.dot}
+        />
+      )}
+
+      {/* Label — only visible when active */}
+      <Animated.Text style={[s.label, labelStyle]}>
+        {config.label}
+      </Animated.Text>
+    </Pressable>
+  );
+}
+
+// ─── Tab bar root ─────────────────────────────────────────────────────────────
+export default function TabBar({ state, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={[s.bar, { height: BAR_H + insets.bottom, paddingBottom: insets.bottom }]}>
+      <View style={s.topBorder} />
+      <View style={s.inner}>
+        {state.routes.map((route, index) => {
+          const config    = TAB_CONFIG.find((t) => t.name === route.name) ?? TAB_CONFIG[0];
+          const isFocused = state.index === index;
+
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
+
+          return (
+            <TabItem
+              key={route.key}
+              config={config}
+              isFocused={isFocused}
+              onPress={onPress}
             />
-            <Text numberOfLines={1} style={[styles.label, active && styles.labelActive]}>
-              {t.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
+          );
+        })}
+      </View>
     </View>
   );
 }
 
-const TAB_H = 54; // slim, not chunky
-
-const styles = StyleSheet.create({
-  wrap: {
-    flexDirection: 'row',
-    height: TAB_H + (Platform.OS === 'android' ? 4 : 0),
-    backgroundColor: colors.card,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    shadowColor: colors.shadow,
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 6,
+const s = StyleSheet.create({
+  bar: {
+    backgroundColor: colors.cream,
+    shadowColor:     colors.deepBrown,
+    shadowOpacity:   0.07,
+    shadowRadius:    12,
+    shadowOffset:    { width: 0, height: -4 },
+    elevation:       12,
   },
-  item: { alignItems: 'center', minWidth: 68, gap: 4 },
-  label: { fontSize: 12, color: colors.muted, fontFamily: 'Manrope_600SemiBold' },
-  labelActive: { color: colors.text, fontFamily: 'Manrope_700Bold' },
+  topBorder: {
+    height:          1,
+    backgroundColor: colors.creamDeep,
+  },
+  inner: {
+    flex:           1,
+    flexDirection:  'row',
+    alignItems:     'center',
+  },
+  tabItem: {
+    flex:           1,
+    alignItems:     'center',
+    justifyContent: 'center',
+    paddingTop:     10,
+    gap:            3,
+  },
+  dot: {
+    width:           5,
+    height:          5,
+    borderRadius:    2.5,
+    backgroundColor: colors.terracotta,
+  },
+  label: {
+    fontFamily:    fonts.semibold,
+    fontSize:      10,
+    color:         colors.terracotta,
+    letterSpacing: 0.2,
+  },
 });

@@ -154,7 +154,7 @@ const s = StyleSheet.create({
     paddingVertical: 4,
     alignSelf: 'flex-start',
   },
-  statusText: { ...t.label, fontSize: 10 },
+  statusText: { ...t.labelLg, fontSize: 10 },
   cardBottom: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   cardTotal: { ...t.price, color: colors.text, flex: 1 },
   pointsRow: { flexDirection: 'row', alignItems: 'center' },
@@ -172,5 +172,5 @@ const s = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.brand,
   },
-  browseBtnText: { ...t.label, color: colors.brand },
+  browseBtnText: { ...t.labelLg, color: colors.brand },
 });

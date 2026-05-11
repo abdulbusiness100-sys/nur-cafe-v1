@@ -156,7 +156,7 @@ const s = StyleSheet.create({
     ...shadow.md,
   },
   panelLabel: {
-    ...t.label,
+    ...t.labelLg,
     color: colors.muted,
     paddingHorizontal: spacing.base,
     paddingTop: spacing.base,
@@ -191,5 +191,5 @@ const s = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.brand,
   },
-  saveBtnText: { ...t.label, color: colors.brand },
+  saveBtnText: { ...t.labelLg, color: colors.brand },
 });

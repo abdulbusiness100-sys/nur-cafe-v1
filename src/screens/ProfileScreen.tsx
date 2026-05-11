@@ -179,6 +179,6 @@ const s = StyleSheet.create({
     borderRadius: radius.full, paddingVertical: spacing.base,
     alignItems: 'center',
   },
-  logoutText: { ...t.label, color: '#5A4638' },
+  logoutText: { ...t.labelLg, color: '#5A4638' },
   version: { ...t.caption, color: colors.subText, textAlign: 'center', marginVertical: spacing.md },
 });

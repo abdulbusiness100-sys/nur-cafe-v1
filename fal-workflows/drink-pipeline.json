@@ -1,0 +1,44 @@
+{
+  "name": "nur-cafe-drink-3d-pipeline",
+  "description": "Generate → Remove Background → Upscale pipeline for Nur Cafe 3D drink renders",
+  "version": "1.0",
+  "steps": [
+    {
+      "id": "generate",
+      "model": "fal-ai/flux/dev",
+      "inputs": {
+        "prompt": "{{prompt}}",
+        "image_size": "square_hd",
+        "num_images": 1,
+        "output_format": "png",
+        "guidance_scale": 3.5,
+        "num_inference_steps": 28
+      },
+      "outputs": ["image_url"]
+    },
+    {
+      "id": "remove-background",
+      "model": "fal-ai/birefnet",
+      "depends_on": "generate",
+      "inputs": {
+        "image_url": "{{generate.image_url}}",
+        "model": "General Use (Light)",
+        "operating_resolution": "1024x1024",
+        "output_format": "png"
+      },
+      "outputs": ["image_url"]
+    },
+    {
+      "id": "upscale",
+      "model": "fal-ai/clarity-upscaler",
+      "depends_on": "remove-background",
+      "inputs": {
+        "image_url": "{{remove-background.image_url}}",
+        "scale_factor": 2,
+        "output_format": "png"
+      },
+      "outputs": ["image_url"]
+    }
+  ],
+  "output": "{{upscale.image_url}}"
+}

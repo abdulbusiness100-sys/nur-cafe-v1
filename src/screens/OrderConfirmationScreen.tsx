@@ -110,7 +110,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     ...shadow.md,
   },
-  orderIdLabel: { ...t.label, color: colors.muted, marginBottom: 2 },
+  orderIdLabel: { ...t.labelLg, color: colors.muted, marginBottom: 2 },
   orderId: { ...t.h2, color: colors.text },
 
   actions: { width: '100%', marginTop: spacing['3xl'], gap: spacing.md },
@@ -125,12 +125,12 @@ const s = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.onBrand,
   },
-  trackBtnText: { ...t.label, color: colors.onBrand },
+  trackBtnText: { ...t.labelLg, color: colors.onBrand },
 
   homeBtn: {
     borderRadius: radius.full,
     paddingVertical: spacing.base,
     alignItems: 'center',
   },
-  homeBtnText: { ...t.label, color: colors.onBrand, opacity: 0.6 },
+  homeBtnText: { ...t.labelLg, color: colors.onBrand, opacity: 0.6 },
 });

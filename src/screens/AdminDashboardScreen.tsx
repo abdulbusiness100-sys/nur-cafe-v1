@@ -90,18 +90,35 @@ export default function AdminDashboardScreen() {
     return () => { channel.unsubscribe(); };
   }, [fetchOrders]);
 
-  const updateStatus = async (orderId: string, newStatus: OrderStatus) => {
-    setUpdating(orderId);
+  const VALID_STATUSES: OrderStatus[] = ['pending', 'preparing', 'ready', 'complete', 'cancelled'];
+
+  const updateStatus = async (order: AdminOrder, newStatus: OrderStatus) => {
+    if (!VALID_STATUSES.includes(newStatus)) return;
+    setUpdating(order.id);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
-    if (error) Alert.alert('Error', 'Could not update order status.');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('orders').update({ status: newStatus }).eq('id', order.id);
+    if (error) {
+      Alert.alert('Error', 'Could not update order status.');
+    } else if (newStatus === 'ready' && order.user_id) {
+      // Notify the customer their order is ready
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from('notifications').insert({
+        user_id:    order.user_id,
+        title:      'Your order is ready ☕',
+        body:       'Head to the counter to collect your order.',
+        type:       'order_ready',
+        read:       false,
+        created_at: new Date().toISOString(),
+      });
+    }
     setUpdating(null);
   };
 
-  const cancelOrder = (orderId: string) =>
+  const cancelOrder = (order: AdminOrder) =>
     Alert.alert('Cancel Order', 'Are you sure?', [
       { text: 'No', style: 'cancel' },
-      { text: 'Cancel Order', style: 'destructive', onPress: () => updateStatus(orderId, 'cancelled') },
+      { text: 'Cancel Order', style: 'destructive', onPress: () => updateStatus(order, 'cancelled') },
     ]);
 
   // Daily stats
@@ -240,7 +257,7 @@ export default function AdminDashboardScreen() {
                       style={s.actionBtn}
                       activeOpacity={0.85}
                       disabled={updating === order.id}
-                      onPress={() => updateStatus(order.id, action.next)}
+                      onPress={() => updateStatus(order, action.next)}
                     >
                       {updating === order.id
                         ? <ActivityIndicator size="small" color="#FFF" />
@@ -250,7 +267,7 @@ export default function AdminDashboardScreen() {
 
                   {/* Cancel */}
                   {(order.status === 'pending' || order.status === 'preparing') && (
-                    <TouchableOpacity style={s.cancelBtn} activeOpacity={0.85} onPress={() => cancelOrder(order.id)}>
+                    <TouchableOpacity style={s.cancelBtn} activeOpacity={0.85} onPress={() => cancelOrder(order)}>
                       <Text style={s.cancelBtnText}>CANCEL ORDER</Text>
                     </TouchableOpacity>
                   )}
@@ -309,7 +326,7 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border,
   },
   tabChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
-  tabChipText: { ...t.label, color: colors.subText, fontSize: 12 },
+  tabChipText: { ...t.labelLg, color: colors.subText, fontSize: 12 },
   tabChipTextActive: { color: '#FFF' },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
@@ -354,12 +371,12 @@ const s = StyleSheet.create({
     borderRadius: radius.full, paddingVertical: spacing.base,
     alignItems: 'center', marginBottom: spacing.sm,
   },
-  actionBtnText: { ...t.label, color: '#FFF' },
+  actionBtnText: { ...t.labelLg, color: '#FFF' },
 
   cancelBtn: {
     marginHorizontal: spacing.base, marginBottom: spacing.base,
     borderRadius: radius.full, paddingVertical: spacing.sm,
     alignItems: 'center', borderWidth: 1, borderColor: '#DC2626',
   },
-  cancelBtnText: { ...t.label, color: '#DC2626', fontSize: 12 },
+  cancelBtnText: { ...t.labelLg, color: '#DC2626', fontSize: 12 },
 });

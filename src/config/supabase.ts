@@ -1,10 +1,17 @@
 // src/config/supabase.ts
 import { createClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
+import Constants from 'expo-constants';
 import type { Database } from '../types/database';
 
-const SUPABASE_URL = 'https://rxnwtonbumbwoqfcpnds.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4bnd0b25idW1id29xZmNwbmRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MjU3NDQsImV4cCI6MjA4ODMwMTc0NH0.ez2AepIHQAZuWEhA2w1zZZ6nyuNxbOnZiJkd5_ZB7fE';
+const SUPABASE_URL = Constants.expoConfig?.extra?.supabaseUrl as string | undefined;
+const SUPABASE_ANON_KEY = Constants.expoConfig?.extra?.supabaseAnonKey as string | undefined;
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error(
+    '[Nūr Café] Missing Supabase config. Set SUPABASE_URL and SUPABASE_ANON_KEY in .env.local (dev) or EAS Secrets (production).',
+  );
+}
 
 // SecureStore adapter for persisting Supabase auth session
 const ExpoSecureStoreAdapter = {
@@ -13,7 +20,7 @@ const ExpoSecureStoreAdapter = {
   removeItem: (key: string) => SecureStore.deleteItemAsync(key),
 };
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+export const supabase = createClient<Database>(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
   auth: {
     storage: ExpoSecureStoreAdapter,
     autoRefreshToken: true,

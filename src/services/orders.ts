@@ -12,10 +12,17 @@ export type OrderItem = {
   extraTotal: number;
 };
 
+export type OrderDiscounts = {
+  discountPoints?: number;   // loyalty points redeemed
+  discountGcCode?: string | null;  // gift card code applied
+  discountGcAmount?: number; // GBP value of gift card discount
+};
+
 export async function createOrder(
   userId: string,
   items: CartItem[],
   subtotal: number,
+  discounts?: OrderDiscounts,
 ): Promise<Order> {
   const orderItems: OrderItem[] = items.map((ci) => ({
     itemId: ci.item.id,
@@ -26,17 +33,24 @@ export async function createOrder(
     extraTotal: ci.extraTotal,
   }));
 
-  const totalPoints = Math.floor(subtotal);
+  const pointDiscount  = ((discounts?.discountPoints ?? 0) / 100);
+  const gcDiscount     = discounts?.discountGcAmount ?? 0;
+  const finalTotal     = Math.max(0, subtotal - pointDiscount - gcDiscount);
+  const totalPoints    = Math.floor(finalTotal);
 
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from('orders')
     .insert({
-      user_id: userId,
-      items: orderItems as any,
+      user_id:            userId,
+      items:              orderItems as any,
       subtotal,
-      total_points: totalPoints,
-      status: 'pending',
-      location_id: 'deansgate',
+      final_total:        finalTotal,
+      discount_points:    discounts?.discountPoints ?? 0,
+      discount_gc_code:   discounts?.discountGcCode ?? null,
+      discount_gc_amount: gcDiscount,
+      total_points:       totalPoints,
+      status:             'pending',
+      location_id:        'deansgate',
     })
     .select()
     .single();
@@ -87,7 +101,7 @@ export function subscribeToOrder(
 }
 
 export async function awardPoints(userId: string, points: number) {
-  const { error } = await supabase.rpc('increment_points', {
+  const { error } = await (supabase as any).rpc('increment_points', {
     user_id: userId,
     points_to_add: points,
   });

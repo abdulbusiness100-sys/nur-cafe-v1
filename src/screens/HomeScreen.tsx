@@ -1,5 +1,5 @@
 // src/screens/HomeScreen.tsx
-// Marketing-enhanced home screen with promotions, newsletter signup, and seasonal features
+// Phase 3 redesign — sand background, Arabic greeting header, float carousel, upgraded loyalty card
 import { useMemo, useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, Image, StyleSheet,
@@ -11,10 +11,11 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import Animated, {
   FadeInDown, FadeInRight,
   useSharedValue, useAnimatedStyle,
-  withRepeat, withTiming, withSequence,
+  withRepeat, withTiming, withSequence, withSpring,
   Easing,
 } from 'react-native-reanimated';
 import type { RootStackParamList } from '../navigation/types';
@@ -24,40 +25,41 @@ import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { supabase } from '../config/supabase';
 import colors from '../theme/colors';
-import { type as t } from '../theme/typography';
-import { spacing, radius, touchTarget, shadow } from '../theme/spacing';
+import { fonts } from '../theme/typography';
+import { spacing, radius, shadow } from '../theme/spacing';
+import { springs } from '../theme/springs';
 
 const { width: W } = Dimensions.get('window');
 const CARD_W = W * 0.84;
 
 const TIER_CONFIG = {
-  bronze: { label: 'Bronze', color: '#CD7F32', next: 50 as number | null },
-  silver: { label: 'Silver', color: '#94A3B8', next: 150 as number | null },
-  gold:   { label: 'Gold',   color: '#F59E0B', next: null as number | null },
+  bronze: { label: 'Bronze',  color: colors.bronze,     next: 50  as number | null },
+  silver: { label: 'Silver',  color: colors.silver,     next: 150 as number | null },
+  gold:   { label: 'Gold',    color: colors.gold,        next: null as number | null },
 };
 
-// Rotating promotional banners — swap these out whenever you want to run a new promo
+// Tier highlight color — arabicGold for Silver/Gold, bronze color for Bronze
+const TIER_TEXT_COLOR = {
+  bronze: colors.bronze,
+  silver: colors.arabicGold,
+  gold:   colors.gold,
+};
+
 const PROMOS = [
   {
-    id: 'p1',
-    headline: 'Double Points',
+    id: 'p1', headline: 'Double Points',
     subline: 'Every order this week earns 2× loyalty points.',
-    icon: 'star' as const,
-    accent: '#F59E0B',
+    icon: 'star' as const, accent: colors.gold,
   },
   {
-    id: 'p2',
-    headline: 'Birthday Drink',
+    id: 'p2', headline: 'Birthday Drink',
     subline: "It's your birthday month? Get a complimentary drink on us.",
-    icon: 'gift' as const,
-    accent: '#EC4899',
+    icon: 'gift' as const, accent: '#EC4899',
   },
   {
-    id: 'p3',
-    headline: 'Refer a Friend',
+    id: 'p3', headline: 'Refer a Friend',
     subline: 'Share your code and both of you earn 20 bonus points.',
-    icon: 'people' as const,
-    accent: '#10B981',
+    icon: 'people' as const, accent: '#10B981',
   },
 ];
 
@@ -66,49 +68,72 @@ export default function HomeScreen() {
   const { profile } = useAuth();
   const { totalItems } = useCart();
 
-  const [promoIndex, setPromoIndex] = useState(0);
-  const [email, setEmail] = useState('');
-  const [subscribing, setSubscribing] = useState(false);
-  const [subscribed, setSubscribed] = useState(false);
+  const [promoIndex,   setPromoIndex]   = useState(0);
+  const [email,        setEmail]        = useState('');
+  const [subscribing,  setSubscribing]  = useState(false);
+  const [subscribed,   setSubscribed]   = useState(false);
 
-  const greeting = useMemo(() => {
+  // ─── Computed values ───────────────────────────────────────────────────────
+  const userName = profile?.name ?? 'Guest';
+  const initial  = userName.charAt(0).toUpperCase();
+  const points   = profile?.points ?? 0;
+  const tier     = (profile?.tier ?? 'bronze') as keyof typeof TIER_CONFIG;
+  const tierCfg  = TIER_CONFIG[tier];
+  const tierTextColor = TIER_TEXT_COLOR[tier];
+  const nextMilestone = tierCfg.next;
+  const progress      = nextMilestone ? Math.min(points / nextMilestone, 1) : 1;
+
+  const popularPicks = useMemo(
+    () => Object.values(menu).flat().filter((m) => m.image).slice(0, 4),
+    []
+  );
+
+  // ─── Greetings — Arabic + English by time of day ───────────────────────────
+  const { arabicGreeting, englishGreeting } = useMemo(() => {
     const h = new Date().getHours();
-    if (h < 12) return 'Good morning,';
-    if (h < 18) return 'Good afternoon,';
-    return 'Good evening,';
+    if (h < 5)  return { arabicGreeting: 'ليلة طيبة،',  englishGreeting: 'Good night,' };
+    if (h < 12) return { arabicGreeting: 'صباح النور،', englishGreeting: 'Good morning,' };
+    if (h < 20) return { arabicGreeting: 'مساء النور،', englishGreeting: 'Good afternoon,' };
+    return       { arabicGreeting: 'ليلة طيبة،',  englishGreeting: 'Good evening,' };
   }, []);
 
-  const userName = profile?.name ?? 'Guest';
-  const initial = userName.charAt(0).toUpperCase();
-  const points = profile?.points ?? 0;
-  const tier = (profile?.tier ?? 'bronze') as keyof typeof TIER_CONFIG;
-  const tierCfg = TIER_CONFIG[tier];
-  const nextMilestone = tierCfg.next;
-  const progress = nextMilestone ? Math.min(points / nextMilestone, 1) : 1;
-
-  // Auto-rotate promo banner every 4 seconds
+  // ─── Auto-rotate promo banner ──────────────────────────────────────────────
   useEffect(() => {
-    const id = setInterval(() => {
-      setPromoIndex((i) => (i + 1) % PROMOS.length);
-    }, 4000);
+    const id = setInterval(() => setPromoIndex((i) => (i + 1) % PROMOS.length), 4000);
     return () => clearInterval(id);
   }, []);
 
-  // Brand name pulse
-  const brandOpacity = useSharedValue(1);
+  // ─── Points pill pulse — every 8s ─────────────────────────────────────────
+  const pillScale = useSharedValue(1);
   useEffect(() => {
-    brandOpacity.value = withRepeat(
+    const pulse = () => {
+      pillScale.value = withSequence(
+        withSpring(1.04, springs.pill),
+        withSpring(1.0,  springs.pill),
+      );
+    };
+    const id = setInterval(pulse, 8000);
+    return () => clearInterval(id);
+  }, []);
+  const pillStyle = useAnimatedStyle(() => ({ transform: [{ scale: pillScale.value }] }));
+
+  // ─── Featured carousel float animation ─────────────────────────────────────
+  const floatY = useSharedValue(0);
+  useEffect(() => {
+    floatY.value = withRepeat(
       withSequence(
-        withTiming(0.7, { duration: 2200, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1,   { duration: 2200, easing: Easing.inOut(Easing.ease) }),
+        withTiming(-4, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+        withTiming( 4, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
       ),
       -1,
-      false,
+      true,
     );
   }, []);
-  const brandAnimStyle = useAnimatedStyle(() => ({ opacity: brandOpacity.value }));
+  const floatStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: floatY.value }],
+  }));
 
-  // Progress bar animated fill
+  // ─── Loyalty progress bar ──────────────────────────────────────────────────
   const barWidth = useSharedValue(0);
   useEffect(() => {
     barWidth.value = withTiming(progress, { duration: 1200, easing: Easing.out(Easing.cubic) });
@@ -117,20 +142,7 @@ export default function HomeScreen() {
     width: `${Math.round(barWidth.value * 100)}%` as any,
   }));
 
-  // Promo dot pulse
-  const dotScale = useSharedValue(1);
-  useEffect(() => {
-    dotScale.value = withRepeat(
-      withSequence(
-        withTiming(1.3, { duration: 600 }),
-        withTiming(1,   { duration: 600 }),
-      ),
-      -1,
-      false,
-    );
-  }, []);
-
-  // Newsletter subscribe — stores in Supabase newsletter_subscribers table
+  // ─── Newsletter ───────────────────────────────────────────────────────────
   const handleSubscribe = async () => {
     if (!email.trim() || !email.includes('@')) {
       Alert.alert('Invalid email', 'Please enter a valid email address.');
@@ -139,13 +151,11 @@ export default function HomeScreen() {
     setSubscribing(true);
     Keyboard.dismiss();
     try {
-      const { error } = await (supabase as any)
+      await (supabase as any)
         .from('newsletter_subscribers')
         .upsert({ email: email.trim().toLowerCase() }, { onConflict: 'email' });
-      if (error) throw error;
       setSubscribed(true);
     } catch {
-      // Fail silently — table may not exist yet, we still record intent
       setSubscribed(true);
     } finally {
       setSubscribing(false);
@@ -154,23 +164,52 @@ export default function HomeScreen() {
 
   const promo = PROMOS[promoIndex];
 
-  // Pick 4 popular items across categories for the "popular picks" strip
-  const popularPicks = useMemo(() => {
-    const all = Object.values(menu).flat();
-    // Take first 2 coffees + first matcha + first latte
-    return all.filter((m) => m.image).slice(0, 4);
-  }, []);
-
   return (
     <SafeAreaView style={s.safe}>
-      {/* ── Top bar ── */}
+
+      {/* ── Top navigation bar ──────────────────────────────────────────── */}
       <View style={s.topbar}>
-        <Pressable onPress={() => nav.navigate('Profile')} style={s.avatar} accessibilityRole="button" accessibilityLabel="Open profile">
+        <Pressable
+          onPress={() => nav.navigate('Profile')}
+          style={s.avatar}
+          accessibilityLabel="Open profile"
+        >
           <Text style={s.avatarInitial}>{initial}</Text>
         </Pressable>
-        <Animated.Text style={[s.brandText, brandAnimStyle]}>Nūr Café</Animated.Text>
-        <TouchableOpacity onPress={() => nav.navigate('Cart')} style={s.cartBtn} accessibilityLabel={`Cart, ${totalItems} items`}>
-          <Ionicons name="bag-outline" size={20} color={colors.brand} />
+
+        <View style={s.greetingBlock}>
+          {/* Arabic greeting — Amiri 400, terracottaDark */}
+          <Text style={s.arabicGreeting} numberOfLines={1}>
+            {arabicGreeting} {userName.split(' ')[0]}
+          </Text>
+          {/* English greeting — Manrope 800, deepBrown */}
+          <Text style={s.englishGreeting} numberOfLines={1}>
+            {englishGreeting} {userName.split(' ')[0]}
+          </Text>
+        </View>
+
+        {/* Points pill */}
+        <Animated.View style={pillStyle}>
+          <TouchableOpacity
+            style={s.pointsPill}
+            onPress={() => {
+              Haptics.selectionAsync();
+              nav.navigate('Loyalty' as any);
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={s.pillStar}>⭐</Text>
+            <Text style={s.pillText}>{points} pts</Text>
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Cart button */}
+        <TouchableOpacity
+          style={s.cartBtn}
+          onPress={() => nav.navigate('Cart')}
+          accessibilityLabel={`Cart, ${totalItems} items`}
+        >
+          <Ionicons name="bag-outline" size={20} color={colors.terracotta} />
           {totalItems > 0 && (
             <View style={s.cartBadge}>
               <Text style={s.cartBadgeText}>{totalItems}</Text>
@@ -179,40 +218,51 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 48 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 48 }}
+      >
 
-        {/* ── Greeting ── */}
-        <Animated.View entering={FadeInDown.delay(0).springify()} style={s.greetingWrap}>
-          <Text style={s.greetingLine}>{greeting}</Text>
-          <Text style={s.greetingName}>{userName}</Text>
-        </Animated.View>
-
-        {/* ── What's new hero carousel ── */}
-        <Animated.Text entering={FadeInDown.delay(60).springify()} style={s.sectionTitle}>
+        {/* ── "What's new" hero carousel ──────────────────────────────── */}
+        <Animated.Text
+          entering={FadeInDown.delay(60).springify()}
+          style={s.sectionTitle}
+        >
           What's new
         </Animated.Text>
 
         <Animated.View entering={FadeInRight.delay(100).springify()}>
           <ScrollView
-            horizontal showsHorizontalScrollIndicator={false}
-            snapToInterval={CARD_W + spacing.md} decelerationRate="fast"
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={CARD_W + spacing.md}
+            decelerationRate="fast"
             contentContainerStyle={{ paddingHorizontal: spacing.base, gap: spacing.md }}
           >
             {featured.map((item) => (
               <TouchableOpacity
-                key={item.id} style={s.heroCard} activeOpacity={0.95}
+                key={item.id}
+                style={s.heroCard}
+                activeOpacity={0.95}
                 onPress={() => nav.navigate('Product', { item })}
               >
-                {resolveImage(item.image)
-                  ? <Image source={resolveImage(item.image) as any} style={s.heroImg} />
-                  : <View style={[s.heroImg, { backgroundColor: colors.brandSoft }]} />}
-                <LinearGradient colors={['transparent', 'rgba(0,0,0,0.72)']} style={s.heroGrad} />
-                <View style={s.heroContent}>
+                {/* Float wrapper around image only */}
+                <Animated.View style={[StyleSheet.absoluteFillObject, floatStyle]}>
+                  {resolveImage(item.image)
+                    ? <Image source={resolveImage(item.image) as any} style={s.heroImg} />
+                    : <View style={[s.heroImg, { backgroundColor: colors.creamDeep }]} />
+                  }
+                </Animated.View>
+
+                {/* Frosted glass content panel — rgba instead of LinearGradient */}
+                <View style={s.heroGlassPanel}>
                   <Text style={s.heroSeason}>Signature</Text>
                   <Text style={s.heroName} numberOfLines={2}>{item.name}</Text>
                   <View style={s.heroRow}>
                     <Text style={s.heroPrice}>£{item.price.toFixed(2)}</Text>
-                    <View style={s.heroBtn}><Text style={s.heroBtnText}>ORDER NOW</Text></View>
+                    <View style={s.heroBtn}>
+                      <Text style={s.heroBtnText}>ORDER NOW</Text>
+                    </View>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -220,7 +270,7 @@ export default function HomeScreen() {
           </ScrollView>
         </Animated.View>
 
-        {/* ── Promotional rotating banner ── */}
+        {/* ── Promotional rotating banner ─────────────────────────────── */}
         <Animated.View entering={FadeInDown.delay(160).springify()} style={s.promoBanner}>
           <View style={[s.promoIconWrap, { backgroundColor: promo.accent + '22' }]}>
             <Ionicons name={promo.icon} size={22} color={promo.accent} />
@@ -229,28 +279,32 @@ export default function HomeScreen() {
             <Text style={s.promoHeadline}>{promo.headline}</Text>
             <Text style={s.promoSub}>{promo.subline}</Text>
           </View>
-          {/* Dot indicators */}
           <View style={s.promoDots}>
             {PROMOS.map((_, i) => (
               <TouchableOpacity key={i} onPress={() => setPromoIndex(i)}>
-                <View style={[s.promoDot, i === promoIndex && { backgroundColor: colors.brand, width: 16 }]} />
+                <View style={[s.promoDot, i === promoIndex && s.promoDotActive]} />
               </TouchableOpacity>
             ))}
           </View>
         </Animated.View>
 
-        {/* ── Rewards card ── */}
+        {/* ── Loyalty / Rewards card — glassmorphic ───────────────────── */}
         <Animated.View entering={FadeInDown.delay(220).springify()} style={s.rewardsCard}>
+          {/* Subtle watermark */}
+          <Text style={s.watermark}>NŪR</Text>
+
           <View style={s.tierRow}>
-            <View style={[s.tierBadge, { backgroundColor: tierCfg.color + '22' }]}>
+            <View style={[s.tierBadge, { backgroundColor: tierCfg.color + '18' }]}>
               <View style={[s.tierDot, { backgroundColor: tierCfg.color }]} />
-              <Text style={[s.tierLabel, { color: tierCfg.color }]}>{tierCfg.label.toUpperCase()}</Text>
+              <Text style={[s.tierLabel, { color: tierTextColor }]}>
+                {tierCfg.label.toUpperCase()}
+              </Text>
             </View>
             <Text style={s.rewardsHeading}>Rewards</Text>
           </View>
 
           <View style={s.pointsRow}>
-            <Ionicons name="star" size={18} color={colors.warning} />
+            <Ionicons name="star" size={18} color={colors.arabicGold} />
             <Text style={s.pointsValue}> {points}</Text>
             <Text style={s.pointsUnit}> {points === 1 ? 'point' : 'points'}</Text>
           </View>
@@ -271,14 +325,20 @@ export default function HomeScreen() {
             <Text style={s.goldText}>You've reached Gold — maximum tier!</Text>
           )}
 
-          <TouchableOpacity style={s.redeemBtn} activeOpacity={0.9} onPress={() => nav.navigate('Cart')}>
-            <Ionicons name="star" size={14} color={colors.brand} />
+          <TouchableOpacity
+            style={s.redeemBtn}
+            activeOpacity={0.9}
+            onPress={() => {
+              Haptics.selectionAsync();
+              nav.navigate('Cart');
+            }}
+          >
+            <Ionicons name="star" size={14} color={colors.cream} />
             <Text style={s.redeemBtnText}>REDEEM AT CHECKOUT</Text>
           </TouchableOpacity>
-          <Text style={s.watermark}>NŪR</Text>
         </Animated.View>
 
-        {/* ── Popular picks ── */}
+        {/* ── Popular picks ──────────────────────────────────────────── */}
         <Animated.View entering={FadeInDown.delay(280).springify()}>
           <View style={s.rowHeader}>
             <Text style={s.sectionTitle}>Popular picks</Text>
@@ -287,7 +347,8 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           <ScrollView
-            horizontal showsHorizontalScrollIndicator={false}
+            horizontal
+            showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: spacing.base, gap: spacing.sm }}
           >
             {popularPicks.map((item) => (
@@ -299,7 +360,8 @@ export default function HomeScreen() {
               >
                 {resolveImage(item.image)
                   ? <Image source={resolveImage(item.image) as any} style={s.pickImg} />
-                  : <View style={[s.pickImg, { backgroundColor: colors.brandSoft }]} />}
+                  : <View style={[s.pickImg, { backgroundColor: colors.creamDeep }]} />
+                }
                 <View style={s.pickInfo}>
                   <Text style={s.pickName} numberOfLines={1}>{item.name}</Text>
                   <Text style={s.pickPrice}>£{item.price.toFixed(2)}</Text>
@@ -309,14 +371,14 @@ export default function HomeScreen() {
           </ScrollView>
         </Animated.View>
 
-        {/* ── Newsletter signup ── */}
+        {/* ── Newsletter signup ───────────────────────────────────────── */}
         <Animated.View entering={FadeInDown.delay(340).springify()} style={s.newsletterCard}>
           <LinearGradient
-            colors={[colors.brandDark, colors.brand]}
+            colors={[colors.terracottaDark, colors.terracotta]}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            style={s.newsletterGrad}
+            style={StyleSheet.absoluteFillObject}
           />
-          <Ionicons name="mail" size={24} color={colors.card} style={{ marginBottom: spacing.sm }} />
+          <Ionicons name="mail" size={24} color={colors.cream} style={{ marginBottom: spacing.sm }} />
           <Text style={s.newsletterTitle}>Stay in the loop</Text>
           <Text style={s.newsletterSub}>
             Get exclusive offers, seasonal menus, and events straight to your inbox.
@@ -352,12 +414,16 @@ export default function HomeScreen() {
           <Text style={s.newsletterWatermark}>NŪR</Text>
         </Animated.View>
 
-        {/* ── View full menu CTA ── */}
+        {/* ── View full menu CTA ──────────────────────────────────────── */}
         <Animated.View entering={FadeInDown.delay(380).springify()}>
-          <TouchableOpacity style={s.menuCta} activeOpacity={0.9} onPress={() => nav.navigate('Order' as any)}>
-            <Ionicons name="cafe" size={20} color={colors.brand} />
+          <TouchableOpacity
+            style={s.menuCta}
+            activeOpacity={0.9}
+            onPress={() => nav.navigate('Order' as any)}
+          >
+            <Ionicons name="cafe" size={20} color={colors.terracotta} />
             <Text style={s.menuCtaText}>VIEW FULL MENU</Text>
-            <Ionicons name="arrow-forward" size={16} color={colors.brand} />
+            <Ionicons name="arrow-forward" size={16} color={colors.terracotta} />
           </TouchableOpacity>
         </Animated.View>
 
@@ -367,162 +433,447 @@ export default function HomeScreen() {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1, backgroundColor: colors.sand },
 
+  // ─── Top bar ─────────────────────────────────────────────────────────────
   topbar: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: spacing.base, paddingBottom: spacing.sm,
+    flexDirection:     'row',
+    alignItems:        'center',
+    paddingHorizontal: spacing.base,
+    paddingBottom:     spacing.base,
+    paddingTop:        spacing.xs,
+    gap:               spacing.sm,
   },
   avatar: {
-    width: touchTarget, height: touchTarget, borderRadius: radius.full,
-    backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center',
+    width:           40,
+    height:          40,
+    borderRadius:    radius.full,
+    backgroundColor: colors.cream,
+    alignItems:      'center',
+    justifyContent:  'center',
+    borderWidth:     1,
+    borderColor:     colors.creamDeep,
   },
-  avatarInitial: { ...t.h3, color: colors.brand },
-  brandText: { flex: 1, textAlign: 'center', ...t.brand, color: colors.onBrand },
+  avatarInitial: {
+    fontFamily: fonts.extrabold,
+    fontSize:   16,
+    color:      colors.terracotta,
+  },
+  greetingBlock: {
+    flex: 1,
+  },
+  arabicGreeting: {
+    fontFamily: fonts.amiri,
+    fontSize:   17,
+    color:      colors.terracottaDark,
+    lineHeight: 22,
+  },
+  englishGreeting: {
+    fontFamily: fonts.extrabold,
+    fontSize:   20,
+    color:      colors.deepBrown,
+    lineHeight: 26,
+    marginTop:  -2,
+  },
+  pointsPill: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    backgroundColor:   colors.terracotta,
+    borderRadius:      20,
+    paddingHorizontal: 12,
+    paddingVertical:   6,
+    gap:               4,
+  },
+  pillStar: { fontSize: 12 },
+  pillText: {
+    fontFamily: fonts.bold,
+    fontSize:   13,
+    color:      colors.cream,
+  },
   cartBtn: {
-    width: touchTarget, height: touchTarget, borderRadius: radius.full,
-    backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center',
+    width:           36,
+    height:          36,
+    borderRadius:    radius.full,
+    backgroundColor: colors.cream,
+    alignItems:      'center',
+    justifyContent:  'center',
+    borderWidth:     1,
+    borderColor:     colors.creamDeep,
   },
   cartBadge: {
-    position: 'absolute', top: 6, right: 6, minWidth: 16, height: 16,
-    borderRadius: 8, backgroundColor: colors.brand,
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
-    borderWidth: 1.5, borderColor: colors.card,
+    position:          'absolute',
+    top:               4,
+    right:             4,
+    minWidth:          14,
+    height:            14,
+    borderRadius:      7,
+    backgroundColor:   colors.terracotta,
+    alignItems:        'center',
+    justifyContent:    'center',
+    paddingHorizontal: 2,
+    borderWidth:       1.5,
+    borderColor:       colors.cream,
   },
-  cartBadgeText: { color: colors.card, fontSize: 9, fontFamily: 'Manrope_800ExtraBold', lineHeight: 11 },
+  cartBadgeText: {
+    color:      colors.cream,
+    fontSize:   9,
+    fontFamily: fonts.extrabold,
+    lineHeight: 11,
+  },
 
-  greetingWrap: { paddingHorizontal: spacing.base, paddingBottom: spacing.base },
-  greetingLine: { ...t.bodyLg, color: colors.onBrand, opacity: 0.65 },
-  greetingName: { ...t.display, color: colors.onBrand, marginTop: 2 },
-
-  sectionTitle: { ...t.h2, color: colors.onBrand, paddingHorizontal: spacing.base, marginBottom: spacing.md },
-
+  sectionTitle: {
+    fontFamily:        fonts.extrabold,
+    fontSize:          20,
+    color:             colors.deepBrown,
+    paddingHorizontal: spacing.base,
+    marginTop:         spacing.xl,
+    marginBottom:      spacing.md,
+  },
   rowHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingRight: spacing.base, marginTop: spacing.xl,
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    paddingRight:   spacing.base,
   },
-  seeAll: { ...t.caption, color: colors.muted, paddingRight: 0 },
+  seeAll: {
+    fontFamily: fonts.semibold,
+    fontSize:   13,
+    color:      colors.subText,
+    letterSpacing: 0.3,
+  },
 
-  // Hero card carousel
+  // ─── Hero card carousel ──────────────────────────────────────────────────
   heroCard: {
-    width: CARD_W, height: CARD_W * 1.05,
-    borderRadius: radius['3xl'], overflow: 'hidden',
-    backgroundColor: colors.card, ...shadow.card,
+    width:           CARD_W,
+    height:          CARD_W * 1.05,
+    borderRadius:    radius['3xl'],
+    overflow:        'hidden',
+    backgroundColor: colors.creamDeep,
+    ...shadow.card,
   },
-  heroImg: { width: '100%', height: '100%' },
-  heroGrad: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '55%' },
-  heroContent: { position: 'absolute', left: spacing.xl, right: spacing.xl, bottom: spacing.xl },
-  heroSeason: { ...t.caption, color: 'rgba(255,255,255,0.75)', letterSpacing: 2, marginBottom: 4 },
+  heroImg: {
+    width:  '100%',
+    height: '110%', // slightly oversize so float doesn't clip
+    top:    '-5%',
+  },
+  heroGlassPanel: {
+    position:         'absolute',
+    left:             0,
+    right:            0,
+    bottom:           0,
+    padding:          spacing.xl,
+    backgroundColor:  'rgba(20, 10, 5, 0.55)',
+    borderTopWidth:   1,
+    borderTopColor:   'rgba(255,255,255,0.08)',
+  },
+  heroSeason: {
+    fontFamily:    fonts.semibold,
+    fontSize:      11,
+    color:         'rgba(255,255,255,0.70)',
+    letterSpacing: 2,
+    marginBottom:  4,
+    textTransform: 'uppercase' as const,
+  },
   heroName: {
-    ...t.h1, color: '#FFF', fontSize: 26, lineHeight: 30,
-    textShadowColor: 'rgba(0,0,0,0.25)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6,
+    fontFamily:       fonts.extrabold,
+    fontSize:         24,
+    color:            '#FFF',
+    lineHeight:       28,
+    textShadowColor:  'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
   },
-  heroRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.md },
-  heroPrice: { ...t.price, color: '#FFF', fontSize: 22 },
+  heroRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    marginTop:      spacing.md,
+  },
+  heroPrice: {
+    fontFamily: fonts.extrabold,
+    fontSize:   22,
+    color:      '#FFF',
+  },
   heroBtn: {
-    backgroundColor: colors.card, borderRadius: radius.full,
-    paddingHorizontal: spacing.base, paddingVertical: spacing.sm,
-    borderWidth: 2, borderColor: colors.brand,
+    backgroundColor:  'rgba(255,255,255,0.15)',
+    borderRadius:     radius.full,
+    paddingHorizontal: spacing.base,
+    paddingVertical:  spacing.sm,
+    borderWidth:      1,
+    borderColor:      'rgba(255,255,255,0.25)',
   },
-  heroBtnText: { ...t.label, color: colors.brand, fontSize: 11 },
+  heroBtnText: {
+    fontFamily:    fonts.extrabold,
+    fontSize:      11,
+    color:         '#FFF',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase' as const,
+  },
 
-  // Promo rotating banner
+  // ─── Promo banner ────────────────────────────────────────────────────────
   promoBanner: {
-    marginHorizontal: spacing.base, marginTop: spacing.xl,
-    backgroundColor: colors.card,
-    borderRadius: radius.xl,
-    borderWidth: 1, borderColor: colors.border,
-    padding: spacing.base,
-    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    marginHorizontal: spacing.base,
+    marginTop:        spacing.lg,
+    backgroundColor:  colors.cream,
+    borderRadius:     radius.xl,
+    borderWidth:      1,
+    borderColor:      colors.creamDeep,
+    padding:          spacing.base,
+    flexDirection:    'row',
+    alignItems:       'center',
+    gap:              spacing.md,
     ...shadow.sm,
   },
   promoIconWrap: {
-    width: 46, height: 46, borderRadius: radius.lg,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  promoHeadline: { ...t.h3, color: colors.text, marginBottom: 2 },
-  promoSub: { ...t.caption, color: colors.subText, lineHeight: 17 },
-  promoDots: { flexDirection: 'column', gap: 5, alignItems: 'center' },
-  promoDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.border },
-
-  // Rewards card
-  rewardsCard: {
-    marginHorizontal: spacing.base, marginTop: spacing.xl,
-    backgroundColor: colors.card, borderRadius: radius['2xl'],
-    padding: spacing.base, borderWidth: 1, borderColor: colors.border,
-    overflow: 'hidden', ...shadow.card,
-  },
-  tierRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.base },
-  tierBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 5 },
-  tierDot: { width: 8, height: 8, borderRadius: 4 },
-  tierLabel: { ...t.label, fontSize: 10 },
-  rewardsHeading: { ...t.h2, color: colors.text },
-  pointsRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: spacing.sm },
-  pointsValue: { ...t.h1, color: colors.text },
-  pointsUnit: { ...t.body, color: colors.subText },
-  progressTrack: { height: 6, backgroundColor: colors.border, borderRadius: 6, overflow: 'hidden', marginBottom: spacing.xs },
-  progressFill: { height: '100%', backgroundColor: colors.brand, borderRadius: 6 },
-  progressLabels: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.base },
-  progressLabel: { ...t.caption, color: colors.subText },
-  goldText: { ...t.body, color: colors.subText, marginBottom: spacing.base },
-  redeemBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs,
-    backgroundColor: colors.card, borderRadius: radius.full, paddingVertical: spacing.base,
-    borderWidth: 2, borderColor: colors.brand,
-  },
-  redeemBtnText: { ...t.label, color: colors.brand },
-  watermark: {
-    position: 'absolute', right: spacing.md, bottom: spacing.sm,
-    fontSize: 72, color: colors.text, opacity: 0.05, fontFamily: 'Amiri_700Bold',
-  },
-
-  // Popular picks
-  pickCard: {
-    width: 140, backgroundColor: colors.card,
-    borderRadius: radius.xl, overflow: 'hidden',
-    borderWidth: 1, borderColor: colors.border, ...shadow.sm,
-  },
-  pickImg: { width: '100%', height: 110 },
-  pickInfo: { padding: spacing.sm },
-  pickName: { ...t.caption, fontFamily: 'Manrope_700Bold', color: colors.text, marginBottom: 2 },
-  pickPrice: { ...t.caption, color: colors.brand },
-
-  // Newsletter
-  newsletterCard: {
-    marginHorizontal: spacing.base, marginTop: spacing.xl,
-    borderRadius: radius['2xl'], overflow: 'hidden',
-    padding: spacing.xl, ...shadow.card,
-  },
-  newsletterGrad: { ...StyleSheet.absoluteFillObject },
-  newsletterTitle: { ...t.h2, color: colors.card, marginBottom: spacing.xs },
-  newsletterSub: { ...t.body, color: 'rgba(239,229,216,0.8)', marginBottom: spacing.base, lineHeight: 22 },
-  emailRow: { flexDirection: 'row', gap: spacing.sm },
-  emailInput: {
-    flex: 1, backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: radius.full, paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md, color: '#FFF',
-    fontFamily: 'Manrope_400Regular', fontSize: 14,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
-  },
-  subscribeBtn: {
-    backgroundColor: colors.card, borderRadius: radius.full,
-    paddingHorizontal: spacing.base, paddingVertical: spacing.md,
+    width:          46,
+    height:         46,
+    borderRadius:   radius.lg,
+    alignItems:     'center',
     justifyContent: 'center',
   },
-  subscribeBtnText: { ...t.label, color: colors.brand, fontSize: 12 },
-  subscribedRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  subscribedText: { ...t.body, color: 'rgba(239,229,216,0.9)' },
-  newsletterWatermark: {
-    position: 'absolute', right: spacing.md, bottom: -8,
-    fontSize: 72, color: 'rgba(255,255,255,0.05)', fontFamily: 'Amiri_700Bold',
+  promoHeadline: {
+    fontFamily:   fonts.bold,
+    fontSize:     15,
+    color:        colors.deepBrown,
+    marginBottom: 2,
+  },
+  promoSub: {
+    fontFamily:  fonts.regular,
+    fontSize:    13,
+    color:       colors.subText,
+    lineHeight:  17,
+  },
+  promoDots: {
+    flexDirection: 'column',
+    gap:           5,
+    alignItems:    'center',
+  },
+  promoDot: {
+    width:           6,
+    height:          6,
+    borderRadius:    3,
+    backgroundColor: colors.creamDeep,
+  },
+  promoDotActive: {
+    backgroundColor: colors.terracotta,
+    width:           16,
   },
 
-  // Menu CTA
-  menuCta: {
-    marginHorizontal: spacing.base, marginTop: spacing.base,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
-    backgroundColor: colors.card, borderRadius: radius.full,
-    paddingVertical: spacing.base, borderWidth: 1, borderColor: colors.border,
+  // ─── Loyalty card — glassmorphic treatment ───────────────────────────────
+  rewardsCard: {
+    marginHorizontal: spacing.base,
+    marginTop:        spacing.lg,
+    backgroundColor:  colors.terracotta,
+    borderRadius:     radius['2xl'],
+    padding:          spacing.base,
+    overflow:         'hidden',
+    ...shadow.card,
   },
-  menuCtaText: { ...t.label, color: colors.brand },
+  tierRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    marginBottom:   spacing.base,
+  },
+  tierBadge: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               spacing.xs,
+    borderRadius:      radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical:   5,
+  },
+  tierDot:   { width: 8, height: 8, borderRadius: 4 },
+  tierLabel: {
+    fontFamily:    fonts.bold,
+    fontSize:      10,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase' as const,
+  },
+  rewardsHeading: {
+    fontFamily: fonts.extrabold,
+    fontSize:   22,
+    color:      colors.cream,
+  },
+  pointsRow: {
+    flexDirection: 'row',
+    alignItems:    'baseline',
+    marginBottom:  spacing.sm,
+  },
+  pointsValue: {
+    fontFamily: fonts.extrabold,
+    fontSize:   32,
+    color:      colors.cream,
+  },
+  pointsUnit: {
+    fontFamily: fonts.medium,
+    fontSize:   15,
+    color:      colors.cream,
+    opacity:    0.75,
+  },
+  progressTrack: {
+    height:          6,
+    backgroundColor: 'rgba(239,229,216,0.25)',
+    borderRadius:    6,
+    overflow:        'hidden',
+    marginBottom:    spacing.xs,
+  },
+  progressFill: {
+    height:          '100%',
+    backgroundColor: colors.cream,
+    borderRadius:    6,
+  },
+  progressLabels: {
+    flexDirection:  'row',
+    justifyContent: 'space-between',
+    marginBottom:   spacing.base,
+  },
+  progressLabel: {
+    fontFamily: fonts.medium,
+    fontSize:   12,
+    color:      colors.cream,
+    opacity:    0.65,
+  },
+  goldText: {
+    fontFamily:   fonts.medium,
+    fontSize:     13,
+    color:        colors.cream,
+    opacity:      0.8,
+    marginBottom: spacing.base,
+  },
+  redeemBtn: {
+    flexDirection:    'row',
+    alignItems:       'center',
+    justifyContent:   'center',
+    gap:              spacing.xs,
+    backgroundColor:  'rgba(255,255,255,0.12)',
+    borderRadius:     radius.full,
+    paddingVertical:  spacing.base,
+    borderWidth:      1,
+    borderColor:      'rgba(255,255,255,0.20)',
+  },
+  redeemBtnText: {
+    fontFamily:    fonts.extrabold,
+    fontSize:      12,
+    color:         colors.cream,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase' as const,
+  },
+  watermark: {
+    position:    'absolute',
+    right:       spacing.md,
+    bottom:      spacing.sm,
+    fontSize:    72,
+    color:       'rgba(255,255,255,0.06)',
+    fontFamily:  fonts.amiriBold,
+  },
+
+  // ─── Popular picks ───────────────────────────────────────────────────────
+  pickCard: {
+    width:           140,
+    backgroundColor: colors.cream,
+    borderRadius:    radius.xl,
+    overflow:        'hidden',
+    borderWidth:     1,
+    borderColor:     colors.creamDeep,
+    ...shadow.sm,
+  },
+  pickImg:  { width: '100%', height: 110 },
+  pickInfo: { padding: spacing.sm },
+  pickName: {
+    fontFamily:   fonts.bold,
+    fontSize:     13,
+    color:        colors.deepBrown,
+    marginBottom: 2,
+  },
+  pickPrice: {
+    fontFamily: fonts.extrabold,
+    fontSize:   13,
+    color:      colors.terracotta,
+  },
+
+  // ─── Newsletter ──────────────────────────────────────────────────────────
+  newsletterCard: {
+    marginHorizontal: spacing.base,
+    marginTop:        spacing.xl,
+    borderRadius:     radius['2xl'],
+    overflow:         'hidden',
+    padding:          spacing.xl,
+    ...shadow.card,
+  },
+  newsletterTitle: {
+    fontFamily:   fonts.extrabold,
+    fontSize:     22,
+    color:        colors.cream,
+    marginBottom: spacing.xs,
+  },
+  newsletterSub: {
+    fontFamily:   fonts.medium,
+    fontSize:     14,
+    color:        'rgba(239,229,216,0.8)',
+    marginBottom: spacing.base,
+    lineHeight:   22,
+  },
+  emailRow:     { flexDirection: 'row', gap: spacing.sm },
+  emailInput:   {
+    flex:            1,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius:    radius.full,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
+    color:           '#FFF',
+    fontFamily:      fonts.regular,
+    fontSize:        14,
+    borderWidth:     1,
+    borderColor:     'rgba(255,255,255,0.25)',
+  },
+  subscribeBtn: {
+    backgroundColor: colors.cream,
+    borderRadius:    radius.full,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
+    justifyContent:  'center',
+  },
+  subscribeBtnText: {
+    fontFamily:    fonts.extrabold,
+    fontSize:      12,
+    color:         colors.terracotta,
+    letterSpacing: 1,
+  },
+  subscribedRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  subscribedText: {
+    fontFamily: fonts.medium,
+    fontSize:   14,
+    color:      'rgba(239,229,216,0.9)',
+  },
+  newsletterWatermark: {
+    position:   'absolute',
+    right:      spacing.md,
+    bottom:     -8,
+    fontSize:   72,
+    color:      'rgba(255,255,255,0.05)',
+    fontFamily: fonts.amiriBold,
+  },
+
+  // ─── Menu CTA ────────────────────────────────────────────────────────────
+  menuCta: {
+    marginHorizontal: spacing.base,
+    marginTop:        spacing.base,
+    flexDirection:    'row',
+    alignItems:       'center',
+    justifyContent:   'center',
+    gap:              spacing.sm,
+    backgroundColor:  colors.cream,
+    borderRadius:     radius.full,
+    paddingVertical:  spacing.base,
+    borderWidth:      1,
+    borderColor:      colors.creamDeep,
+  },
+  menuCtaText: {
+    fontFamily:    fonts.extrabold,
+    fontSize:      13,
+    color:         colors.terracotta,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase' as const,
+  },
 });

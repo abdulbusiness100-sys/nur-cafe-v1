@@ -195,7 +195,7 @@ const s = StyleSheet.create({
   tierRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.base },
   tierBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 5 },
   tierDot: { width: 8, height: 8, borderRadius: 4 },
-  tierLabel: { ...t.label, fontSize: 10 },
+  tierLabel: { ...t.labelLg, fontSize: 10 },
   cardHeading: { ...t.h2, color: colors.text },
 
   pointsRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: spacing.md },
@@ -264,6 +264,6 @@ const s = StyleSheet.create({
     padding: spacing.md, alignItems: 'center', gap: spacing.xs,
   },
   tierDotLg: { width: 16, height: 16, borderRadius: 8 },
-  tierCardLabel: { ...t.label, fontSize: 12 },
+  tierCardLabel: { ...t.labelLg, fontSize: 12 },
   tierCardThreshold: { ...t.caption, color: colors.subText, textAlign: 'center' },
 });

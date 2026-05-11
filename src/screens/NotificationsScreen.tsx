@@ -1,5 +1,5 @@
 // src/screens/NotificationsScreen.tsx
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
   TouchableOpacity, ActivityIndicator,
@@ -13,6 +13,7 @@ import {
   getUserNotifications,
   markAllRead,
   markNotificationRead,
+  subscribeToNotifications,
 } from '../services/notifications';
 import type { Notification } from '../types/database';
 import colors from '../theme/colors';
@@ -33,6 +34,15 @@ export default function NotificationsScreen() {
   };
 
   useEffect(() => { load(); }, [user]);
+
+  // Realtime — prepend new notifications as they arrive
+  useEffect(() => {
+    if (!user) return;
+    const sub = subscribeToNotifications(user.id, (newNotif) => {
+      setNotifs((prev) => [newNotif, ...prev]);
+    });
+    return () => { sub.unsubscribe(); };
+  }, [user?.id]);
 
   const handleMarkAllRead = async () => {
     if (!user) return;

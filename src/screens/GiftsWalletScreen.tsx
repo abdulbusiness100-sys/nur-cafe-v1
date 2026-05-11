@@ -1,155 +1,40 @@
 // src/screens/GiftsWalletScreen.tsx
-import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
+// Phase 6 — Gift card carousel + modal + wallet balance
+import { useState, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  FlatList, Dimensions, Alert, Share,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useStripe } from '@stripe/stripe-react-native';
+import * as Haptics from 'expo-haptics';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../config/supabase';
+import { GIFT_CARD_TIERS, type GiftCardTier } from '../services/giftCards';
+import GiftCardModal from '../components/GiftCardModal';
 import colors from '../theme/colors';
+import { fonts } from '../theme/typography';
 import { spacing, radius, shadow } from '../theme/spacing';
-import { type as t } from '../theme/typography';
 
-const GIFT_CARDS = [
-  { id: 'gc-1', color: colors.brand,     label: 'Classic', value: '£10' },
-  { id: 'gc-2', color: colors.brandDark, label: 'Premium', value: '£25' },
-  { id: 'gc-3', color: '#C0825A',        label: 'Deluxe',  value: '£50' },
-];
+const { width: W } = Dimensions.get('window');
+const CARD_W = W * 0.75;
 
+// ─── FAQ data ─────────────────────────────────────────────────────────────────
 const GIFTS_FAQ = [
-  { q: 'Do Nur Café gift cards expire?',                  a: 'Gift cards do not expire.' },
-  { q: 'How does the recipient redeem a gift card?',      a: 'Sign in to the Nur Café app and redeem from the Gift Cards section.' },
-  { q: 'How do recipients view the available balance?',   a: 'Tap Gifts › Wallet or Settings › Wallet to view available balance.' },
-  { q: "What if the recipient doesn't use it all at once?", a: 'The remaining balance stays in their Wallet for future purchases.' },
+  { q: 'Do Nur Café gift cards expire?',             a: 'Gift cards do not expire.' },
+  { q: 'How does the recipient redeem a gift card?', a: 'Sign in to the Nūr Café app and enter the code at checkout.' },
+  { q: 'What if the full balance isn\'t used?',      a: 'The remaining balance stays in their wallet for future orders.' },
 ];
 
 const WALLET_FAQ = [
-  { q: 'Does Nur Café Balance expire?',          a: "Top-ups and gift cards never expire. Credits expire 1 year from the date they're added unless stated otherwise." },
-  { q: 'How do I view my available balance?',    a: 'Tap Gifts › Wallet or Settings › Wallet and view available balance.' },
-  { q: "What if I don't use it all in one order?", a: 'Any remaining balance is automatically applied to your next purchase.' },
-  { q: 'Can I use Nur Café Balance overseas?',   a: 'You can only use Nur Café Balance in the country in which it was purchased.' },
+  { q: 'Does Nūr Café Balance expire?',               a: "Top-ups and gift cards never expire. Credits expire 1 year from the date they're added unless stated otherwise." },
+  { q: 'How do I view my available balance?',         a: 'Tap Gifts & Wallet then the Wallet tab to see your balance.' },
+  { q: 'What if I don\'t use it all in one order?',   a: 'Any remaining balance is automatically applied to your next purchase.' },
 ];
 
-const CONTACT_EMAIL = 'mailto:info@nurcafe.co.uk?subject=Gift%20Card%20Enquiry';
-
-export default function GiftsWalletScreen() {
-  const { profile } = useAuth();
-  const walletBalance = profile?.wallet_balance ?? 0;
-
-  const [tab, setTab] = useState<'gift' | 'wallet'>('gift');
-  const [openGift, setOpenGift] = useState<number | null>(null);
-  const [openWallet, setOpenWallet] = useState<number | null>(null);
-
-  return (
-    <SafeAreaView style={s.safe}>
-      {/* Tab bar */}
-      <View style={s.tabs}>
-        {(['gift', 'wallet'] as const).map((key) => (
-          <TouchableOpacity key={key} onPress={() => setTab(key)} style={s.tab}>
-            <Text style={[s.tabText, tab === key && s.tabTextActive]}>
-              {key === 'gift' ? 'Gift Cards' : 'Wallet'}
-            </Text>
-            {tab === key && <View style={s.tabUnderline} />}
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
-        {tab === 'gift' ? (
-          <>
-            {/* Featured gift cards carousel */}
-            <Animated.View entering={FadeInDown.delay(0).springify()}>
-              <Text style={s.sectionTitle}>Featured gift cards</Text>
-              <ScrollView
-                horizontal showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingHorizontal: spacing.base, gap: spacing.md }}
-              >
-                {GIFT_CARDS.map((gc) => (
-                  <TouchableOpacity key={gc.id} style={[s.bigCard, { backgroundColor: gc.color }]} activeOpacity={0.9} onPress={() => Linking.openURL(CONTACT_EMAIL)}>
-                    <Text style={s.bigCardBrand}>NŪR CAFÉ</Text>
-                    <Text style={s.bigCardLabel}>{gc.label}</Text>
-                    <Text style={s.bigCardValue}>{gc.value}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </Animated.View>
-
-            {/* FAQ */}
-            <Animated.View entering={FadeInDown.delay(80).springify()}>
-              <Text style={s.sectionTitle}>Gift cards FAQ</Text>
-              <View style={s.faqList}>
-                {GIFTS_FAQ.map((f, i) => (
-                  <FaqRow
-                    key={`gfaq-${i}`}
-                    q={f.q} a={f.a}
-                    open={openGift === i}
-                    onToggle={() => setOpenGift(openGift === i ? null : i)}
-                    last={i === GIFTS_FAQ.length - 1}
-                  />
-                ))}
-              </View>
-            </Animated.View>
-
-            <Animated.View entering={FadeInDown.delay(140).springify()} style={s.contactRow}>
-              <Text style={s.contactLead}>Still got questions?</Text>
-              <TouchableOpacity style={s.contactBtn} activeOpacity={0.9} onPress={() => Linking.openURL(CONTACT_EMAIL)}>
-                <Text style={s.contactBtnText}>CONTACT US</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          </>
-        ) : (
-          <>
-            {/* Wallet balance card — reads from Supabase profile */}
-            <Animated.View entering={FadeInDown.delay(0).springify()} style={s.walletCard}>
-              <View style={s.walletIconWrap}>
-                <Ionicons name="wallet-outline" size={28} color={colors.brand} />
-              </View>
-              <Text style={s.walletLabel}>
-                {walletBalance > 0 ? 'AVAILABLE BALANCE' : "YOUR WALLET'S EMPTY"}
-              </Text>
-              <Text style={s.walletBalance}>£{walletBalance.toFixed(2)}</Text>
-
-              <TouchableOpacity
-                style={s.walletBtn} activeOpacity={0.9}
-                onPress={() => Linking.openURL('mailto:info@nurcafe.co.uk?subject=Wallet%20Top-Up%20Request&body=Hi%20N%C5%ABr%20Caf%C3%A9%20team%2C%20I%27d%20like%20to%20top%20up%20my%20wallet.%20Amount%3A%20%0D%0AName%3A%20')}
-              >
-                <Ionicons name="mail-outline" size={16} color={colors.brand} />
-                <Text style={s.walletBtnText}>REQUEST TOP-UP</Text>
-              </TouchableOpacity>
-              <Text style={s.walletNote}>We'll confirm and add funds within 24 hours.</Text>
-              <Text style={s.watermark}>NŪR</Text>
-            </Animated.View>
-
-            {/* Wallet FAQ */}
-            <Animated.View entering={FadeInDown.delay(80).springify()}>
-              <Text style={s.sectionTitle}>Wallet FAQ</Text>
-              <View style={s.faqList}>
-                {WALLET_FAQ.map((f, i) => (
-                  <FaqRow
-                    key={`wfaq-${i}`}
-                    q={f.q} a={f.a}
-                    open={openWallet === i}
-                    onToggle={() => setOpenWallet(openWallet === i ? null : i)}
-                    last={i === WALLET_FAQ.length - 1}
-                  />
-                ))}
-              </View>
-            </Animated.View>
-
-            <Animated.View entering={FadeInDown.delay(140).springify()} style={s.contactRow}>
-              <Text style={s.contactLead}>Still got questions?</Text>
-              <TouchableOpacity style={s.contactBtn} activeOpacity={0.9} onPress={() => Linking.openURL(CONTACT_EMAIL)}>
-                <Text style={s.contactBtnText}>CONTACT US</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          </>
-        )}
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-// ── FAQ row component ─────────────────────────────────────────────────────────
-
+// ─── FAQ row ──────────────────────────────────────────────────────────────────
 function FaqRow({
   q, a, open, onToggle, last,
 }: {
@@ -170,88 +55,379 @@ function FaqRow({
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
+// ─── Gift card tile in carousel ───────────────────────────────────────────────
+function GiftCardTile({ tier, onPress }: { tier: GiftCardTier; onPress: () => void }) {
+  return (
+    <TouchableOpacity
+      style={[s.cardTile, { backgroundColor: tier.color }]}
+      onPress={onPress}
+      activeOpacity={0.88}
+    >
+      <Text style={s.tileBrand}>NŪR CAFÉ</Text>
+      <View>
+        <Text style={s.tileLabel}>{tier.label}</Text>
+        <Text style={s.tileValue}>£{tier.value.toFixed(2)}</Text>
+      </View>
+      <View style={s.tileFooter}>
+        <Text style={s.tilePerk} numberOfLines={2}>{tier.perk}</Text>
+        <View style={s.tileBadge}>
+          <Text style={s.tileBadgeText}>TAP TO GIFT</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
+export default function GiftsWalletScreen() {
+  const { profile } = useAuth();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+
+  const walletBalance  = profile?.wallet_balance ?? 0;
+  const [tab, setTab]  = useState<'gift' | 'wallet'>('gift');
+  const [selectedTier, setSelectedTier] = useState<GiftCardTier | null>(null);
+  const [openGift,   setOpenGift]   = useState<number | null>(null);
+  const [openWallet, setOpenWallet] = useState<number | null>(null);
+
+  const handleBuy = useCallback(async (tier: GiftCardTier) => {
+    if (!profile) return;
+    setSelectedTier(null); // close modal first
+
+    try {
+      const { data: fnData, error: fnError } = await supabase.functions.invoke(
+        'create-payment-intent',
+        { body: { amount: Math.round(tier.value * 100), currency: 'gbp', type: 'gift_card', tier: tier.id } },
+      );
+
+      if (fnError || !fnData?.clientSecret) {
+        throw new Error(fnError?.message ?? 'Could not initialise payment.');
+      }
+
+      const { error: initError } = await initPaymentSheet({
+        merchantDisplayName: 'Nūr Café',
+        paymentIntentClientSecret: fnData.clientSecret,
+        defaultBillingDetails: { name: profile.name },
+        appearance: {
+          colors: {
+            primary:             colors.terracotta,
+            background:          colors.sand,
+            componentBackground: colors.cream,
+            componentBorder:     colors.creamDeep,
+            primaryText:         colors.deepBrown,
+            secondaryText:       colors.subText,
+            componentText:       colors.deepBrown,
+            placeholderText:     colors.muted,
+          },
+        },
+      });
+
+      if (initError) throw new Error(initError.message);
+
+      const { error: presentError } = await presentPaymentSheet();
+      if (presentError) {
+        if (presentError.code !== 'Canceled') {
+          Alert.alert('Payment failed', presentError.message);
+        }
+        return;
+      }
+
+      // Issue the gift card — generates code + inserts DB row
+      const { data: gcData, error: gcError } = await supabase.functions.invoke(
+        'issue-gift-card',
+        { body: { tier: tier.id, amount: Math.round(tier.value * 100) } },
+      );
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      const code: string = gcData?.code ?? 'Check your email';
+      if (!gcError && gcData?.code) {
+        Alert.alert(
+          '🎁 Gift Card Issued!',
+          `Your ${tier.label} gift card code:\n\n${code}\n\nTap Copy to save it.`,
+          [
+            { text: 'Share', onPress: () => Share.share({ message: `Nūr Café gift card code: ${code}` }) },
+            { text: 'Done', style: 'cancel' },
+          ],
+        );
+      } else {
+        Alert.alert(
+          '🎁 Payment Received',
+          `Your ${tier.label} gift card (£${tier.value.toFixed(2)}) will be emailed to you shortly.`,
+        );
+      }
+    } catch (e: any) {
+      Alert.alert('Purchase Failed', e.message ?? 'Something went wrong. Please try again.');
+    }
+  }, [profile]);
+
+  return (
+    <SafeAreaView style={s.safe}>
+      {/* Tab selector */}
+      <View style={s.tabRow}>
+        {(['gift', 'wallet'] as const).map((key) => (
+          <TouchableOpacity
+            key={key}
+            onPress={() => setTab(key)}
+            style={s.tabBtn}
+            activeOpacity={0.8}
+          >
+            <Text style={[s.tabText, tab === key && s.tabTextActive]}>
+              {key === 'gift' ? 'Gift Cards' : 'Wallet'}
+            </Text>
+            {tab === key && <View style={s.tabUnderline} />}
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+        {tab === 'gift' ? (
+          <>
+            {/* Carousel */}
+            <Animated.View entering={FadeInDown.delay(0).springify()}>
+              <Text style={s.sectionTitle}>Choose a gift card</Text>
+              <FlatList
+                data={GIFT_CARD_TIERS}
+                keyExtractor={(t) => t.id}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                snapToInterval={CARD_W + spacing.md}
+                decelerationRate="fast"
+                contentContainerStyle={{ paddingHorizontal: spacing.base, gap: spacing.md }}
+                renderItem={({ item }) => (
+                  <GiftCardTile tier={item} onPress={() => setSelectedTier(item)} />
+                )}
+              />
+            </Animated.View>
+
+            {/* FAQ */}
+            <Animated.View entering={FadeInDown.delay(80).springify()}>
+              <Text style={s.sectionTitle}>Gift cards FAQ</Text>
+              <View style={s.faqList}>
+                {GIFTS_FAQ.map((f, i) => (
+                  <FaqRow
+                    key={`gfaq-${i}`}
+                    q={f.q}
+                    a={f.a}
+                    open={openGift === i}
+                    onToggle={() => setOpenGift(openGift === i ? null : i)}
+                    last={i === GIFTS_FAQ.length - 1}
+                  />
+                ))}
+              </View>
+            </Animated.View>
+          </>
+        ) : (
+          <>
+            {/* Wallet balance */}
+            <Animated.View entering={FadeInDown.delay(0).springify()} style={s.walletCard}>
+              <View style={s.walletIconWrap}>
+                <Ionicons name="wallet-outline" size={28} color={colors.terracotta} />
+              </View>
+              <Text style={s.walletLabel}>
+                {walletBalance > 0 ? 'AVAILABLE BALANCE' : "YOUR WALLET'S EMPTY"}
+              </Text>
+              <Text style={s.walletBalance}>£{walletBalance.toFixed(2)}</Text>
+              <Text style={s.walletNote}>
+                Wallet balance is applied automatically at checkout.
+              </Text>
+              <Text style={s.watermark}>NŪR</Text>
+            </Animated.View>
+
+            {/* Wallet FAQ */}
+            <Animated.View entering={FadeInDown.delay(80).springify()}>
+              <Text style={s.sectionTitle}>Wallet FAQ</Text>
+              <View style={s.faqList}>
+                {WALLET_FAQ.map((f, i) => (
+                  <FaqRow
+                    key={`wfaq-${i}`}
+                    q={f.q}
+                    a={f.a}
+                    open={openWallet === i}
+                    onToggle={() => setOpenWallet(openWallet === i ? null : i)}
+                    last={i === WALLET_FAQ.length - 1}
+                  />
+                ))}
+              </View>
+            </Animated.View>
+          </>
+        )}
+      </ScrollView>
+
+      {/* Gift card detail modal */}
+      <GiftCardModal
+        tier={selectedTier}
+        onClose={() => setSelectedTier(null)}
+        onBuy={handleBuy}
+      />
+    </SafeAreaView>
+  );
+}
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1, backgroundColor: colors.sand },
 
-  // Tabs
-  tabs: {
-    flexDirection: 'row', alignSelf: 'center', gap: spacing.xl,
-    paddingTop: spacing.md, paddingBottom: spacing.sm,
+  // ─── Tabs ─────────────────────────────────────────────────────────────────
+  tabRow: {
+    flexDirection:  'row',
+    justifyContent: 'center',
+    gap:            spacing['2xl'],
+    paddingTop:     spacing.md,
+    paddingBottom:  spacing.sm,
   },
-  tab: { alignItems: 'center', paddingBottom: 6 },
-  tabText: { ...t.h3, color: '#EED3CB' },
-  tabTextActive: { color: colors.card },
-  tabUnderline: { marginTop: 4, height: 3, width: 36, backgroundColor: colors.card, borderRadius: 2 },
+  tabBtn: { alignItems: 'center', paddingBottom: 6 },
+  tabText: {
+    fontFamily: fonts.bold,
+    fontSize:   17,
+    color:      colors.muted,
+  },
+  tabTextActive: { color: colors.deepBrown },
+  tabUnderline: {
+    marginTop:       4,
+    height:          3,
+    width:           36,
+    backgroundColor: colors.terracotta,
+    borderRadius:    2,
+  },
 
   sectionTitle: {
-    ...t.h3, color: colors.onBrand,
-    marginHorizontal: spacing.base, marginTop: spacing.xl, marginBottom: spacing.md,
+    fontFamily:     fonts.bold,
+    fontSize:       18,
+    color:          colors.deepBrown,
+    marginHorizontal: spacing.base,
+    marginTop:      spacing.xl,
+    marginBottom:   spacing.md,
   },
 
-  // Gift card carousel
-  bigCard: {
-    width: 300, height: 170, borderRadius: radius['2xl'],
-    padding: spacing.base, justifyContent: 'space-between',
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)',
+  // ─── Gift card tile ───────────────────────────────────────────────────────
+  cardTile: {
+    width:          CARD_W,
+    height:         190,
+    borderRadius:   radius.xl,
+    padding:        spacing.xl,
+    justifyContent: 'space-between',
+    borderWidth:    1.5,
+    borderColor:    'rgba(255,255,255,0.18)',
+    ...shadow.card,
   },
-  bigCardBrand: { ...t.label, color: 'rgba(255,255,255,0.85)', letterSpacing: 3 },
-  bigCardLabel: { ...t.h2, color: '#FFF' },
-  bigCardValue: { ...t.display, color: '#FFF', fontSize: 28 },
+  tileBrand: {
+    fontFamily:    fonts.amiriBold,
+    fontSize:      13,
+    color:         'rgba(255,255,255,0.8)',
+    letterSpacing: 3,
+  },
+  tileLabel: {
+    fontFamily:    fonts.extrabold,
+    fontSize:      22,
+    color:         '#FFF',
+    letterSpacing: 1,
+  },
+  tileValue: {
+    fontFamily: fonts.amiriBold,
+    fontSize:   28,
+    color:      '#FFF',
+    marginTop:  2,
+  },
+  tileFooter: {
+    flexDirection:  'row',
+    justifyContent: 'space-between',
+    alignItems:     'flex-end',
+  },
+  tilePerk: {
+    fontFamily: fonts.medium,
+    fontSize:   11,
+    color:      'rgba(255,255,255,0.7)',
+    flex:       1,
+    marginRight: spacing.sm,
+  },
+  tileBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius:    radius.sm,
+    paddingHorizontal: 8,
+    paddingVertical:   4,
+    borderWidth:    1,
+    borderColor:    'rgba(255,255,255,0.3)',
+  },
+  tileBadgeText: {
+    fontFamily:    fonts.extrabold,
+    fontSize:      9,
+    color:         '#FFF',
+    letterSpacing: 1,
+  },
 
-  // FAQ
+  // ─── FAQ ──────────────────────────────────────────────────────────────────
   faqList: {
     marginHorizontal: spacing.base,
-    backgroundColor: colors.card, borderRadius: radius.xl,
-    borderWidth: 1, borderColor: colors.border, overflow: 'hidden',
+    backgroundColor:  colors.cream,
+    borderRadius:     radius.xl,
+    borderWidth:      1,
+    borderColor:      colors.creamDeep,
+    overflow:         'hidden',
   },
-  faqRow: { paddingHorizontal: spacing.base, paddingVertical: spacing.md },
-  faqBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
+  faqRow:   { paddingHorizontal: spacing.base, paddingVertical: spacing.md },
+  faqBorder: { borderBottomWidth: 1, borderBottomColor: colors.creamDeep },
   faqHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  faqQ: { ...t.body, fontFamily: 'Manrope_700Bold', color: colors.text, flex: 1 },
-  faqA: { ...t.body, color: colors.subText, marginTop: spacing.sm, lineHeight: 22 },
-
-  // Contact footer
-  contactRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginHorizontal: spacing.base, marginTop: spacing.xl,
+  faqQ: {
+    fontFamily: fonts.bold,
+    fontSize:   14,
+    color:      colors.deepBrown,
+    flex:       1,
   },
-  contactLead: { ...t.h3, color: colors.onBrand },
-  contactBtn: {
-    backgroundColor: colors.card, borderRadius: radius.full,
-    paddingHorizontal: spacing.base, paddingVertical: spacing.sm,
-    borderWidth: 2, borderColor: colors.brand,
+  faqA: {
+    fontFamily: fonts.regular,
+    fontSize:   13,
+    color:      colors.subText,
+    marginTop:  spacing.sm,
+    lineHeight: 20,
   },
-  contactBtnText: { ...t.label, color: colors.brand, fontSize: 11 },
 
-  // Wallet card
+  // ─── Wallet card ──────────────────────────────────────────────────────────
   walletCard: {
-    marginHorizontal: spacing.base, marginTop: spacing.md,
-    backgroundColor: colors.card, borderRadius: radius['2xl'],
-    padding: spacing.xl, alignItems: 'center',
-    borderWidth: 1, borderColor: colors.border,
-    overflow: 'hidden', ...shadow.card,
+    marginHorizontal: spacing.base,
+    marginTop:        spacing.md,
+    backgroundColor:  colors.cream,
+    borderRadius:     radius['2xl'],
+    padding:          spacing.xl,
+    alignItems:       'center',
+    borderWidth:      1,
+    borderColor:      colors.creamDeep,
+    overflow:         'hidden',
+    ...shadow.card,
   },
   walletIconWrap: {
-    width: 56, height: 56, borderRadius: radius.full,
-    backgroundColor: colors.brandSoft,
-    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md,
+    width:           56,
+    height:          56,
+    borderRadius:    radius.full,
+    backgroundColor: `${colors.terracotta}18`,
+    alignItems:      'center',
+    justifyContent:  'center',
+    marginBottom:    spacing.md,
   },
-  walletLabel: { ...t.label, color: colors.subText, letterSpacing: 1, marginBottom: spacing.sm },
-  walletBalance: { fontSize: 48, fontFamily: 'Manrope_800ExtraBold', color: colors.text, marginBottom: spacing.base },
-  walletBtn: {
-    width: '100%', borderRadius: radius.full,
-    paddingVertical: spacing.base, alignItems: 'center',
-    borderWidth: 2, borderColor: colors.brand, marginTop: spacing.sm,
-    flexDirection: 'row', justifyContent: 'center', gap: spacing.xs,
+  walletLabel: {
+    fontFamily:    fonts.bold,
+    fontSize:      11,
+    color:         colors.subText,
+    letterSpacing: 1.5,
+    marginBottom:  spacing.sm,
   },
-  walletBtnSecondary: { borderColor: colors.border },
-  walletBtnText: { ...t.label, color: colors.brand },
-  walletNote: { ...t.caption, color: colors.muted, textAlign: 'center', marginTop: spacing.sm },
+  walletBalance: {
+    fontFamily:   fonts.extrabold,
+    fontSize:     48,
+    color:        colors.deepBrown,
+    marginBottom: spacing.base,
+  },
+  walletNote: {
+    fontFamily: fonts.medium,
+    fontSize:   13,
+    color:      colors.muted,
+    textAlign:  'center',
+  },
   watermark: {
-    position: 'absolute', right: spacing.md, bottom: spacing.sm,
-    fontSize: 64, color: colors.text, opacity: 0.04,
-    fontFamily: 'Manrope_800ExtraBold',
+    position:   'absolute',
+    right:      spacing.md,
+    bottom:     spacing.sm,
+    fontSize:   64,
+    color:      colors.deepBrown,
+    opacity:    0.04,
+    fontFamily: fonts.extrabold,
   },
 });

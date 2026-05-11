@@ -27,7 +27,7 @@ export default function HeroCard({ item, onPress }: Props) {
             onPress={() => onPress?.(item)}
         >
             {item.image ? (
-                <Image source={{ uri: item.image }} style={styles.img} />
+                <Image source={typeof item.image === 'number' ? item.image : { uri: item.image as string }} style={styles.img} />
             ) : (
                 <View style={[styles.img, styles.imgPlaceholder]} />
             )}

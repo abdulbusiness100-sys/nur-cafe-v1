@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../config/supabase';
 import { getProfile } from '../services/auth';
+import { registerForPushNotificationsAsync } from '../services/pushNotifications';
 import type { Profile } from '../types/database';
 
 type AuthContextValue = {
@@ -27,6 +28,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(data);
   };
 
+  const registerPushToken = async (uid: string) => {
+    const token = await registerForPushNotificationsAsync();
+    if (!token) return;
+    await (supabase as any).from('profiles').update({ push_token: token }).eq('id', uid);
+  };
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
@@ -39,11 +46,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, s) => {
+      async (event, s) => {
         setSession(s);
         setUser(s?.user ?? null);
         if (s?.user) {
           await loadProfile(s.user.id);
+          // Register push token on fresh sign-in (not on every token refresh)
+          if (event === 'SIGNED_IN') {
+            registerPushToken(s.user.id);
+          }
         } else {
           setProfile(null);
         }

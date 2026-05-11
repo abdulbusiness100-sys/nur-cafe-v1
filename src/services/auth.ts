@@ -36,6 +36,6 @@ export async function getProfile(uid: string): Promise<Profile | null> {
 }
 
 export async function updateProfile(uid: string, updates: Partial<Pick<Profile, 'name'>>) {
-  const { error } = await supabase.from('profiles').update(updates).eq('id', uid);
+  const { error } = await (supabase as any).from('profiles').update(updates).eq('id', uid);
   if (error) throw error;
 }

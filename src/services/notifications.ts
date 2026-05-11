@@ -25,7 +25,7 @@ export async function getUnreadCount(userId: string): Promise<number> {
 }
 
 export async function markNotificationRead(notifId: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await (supabase as any)
     .from('notifications')
     .update({ read: true })
     .eq('id', notifId);
@@ -34,7 +34,7 @@ export async function markNotificationRead(notifId: string): Promise<void> {
 }
 
 export async function markAllRead(userId: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await (supabase as any)
     .from('notifications')
     .update({ read: true })
     .eq('user_id', userId)

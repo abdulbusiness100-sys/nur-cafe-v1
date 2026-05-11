@@ -13,6 +13,7 @@ import colors from '../theme/colors';
 import { spacing, radius, touchTarget } from '../theme/spacing';
 import { type as t } from '../theme/typography';
 import { useCart } from '../context/CartContext';
+import * as Haptics from 'expo-haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Cart'>;
 
@@ -78,7 +79,7 @@ export default function CartScreen({ navigation }: Props) {
               <View style={s.stepper}>
                 <TouchableOpacity
                   style={s.stepBtn}
-                  onPress={() => decrementItem(ci.item.id)}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); decrementItem(ci.item.id); }}
                   accessibilityLabel="Decrease quantity"
                 >
                   <Ionicons name="remove" size={18} color={colors.brand} />
@@ -86,7 +87,7 @@ export default function CartScreen({ navigation }: Props) {
                 <Text style={s.qty}>{ci.quantity}</Text>
                 <TouchableOpacity
                   style={s.stepBtn}
-                  onPress={() => incrementItem(ci.item.id)}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); incrementItem(ci.item.id); }}
                   accessibilityLabel="Increase quantity"
                 >
                   <Ionicons name="add" size={18} color={colors.brand} />
@@ -232,7 +233,7 @@ const s = StyleSheet.create({
     paddingVertical: spacing.base,
     borderWidth: 2, borderColor: colors.brand,
   },
-  checkoutText: { ...t.label, color: colors.brand, fontSize: 14 },
+  checkoutText: { ...t.labelLg, color: colors.brand, fontSize: 14 },
 
   // Empty state
   empty: {
@@ -246,5 +247,5 @@ const s = StyleSheet.create({
     borderRadius: radius.full, paddingVertical: spacing.base, paddingHorizontal: spacing['2xl'],
     borderWidth: 2, borderColor: colors.brand,
   },
-  browseCtaText: { ...t.label, color: colors.brand },
+  browseCtaText: { ...t.labelLg, color: colors.brand },
 });

@@ -217,5 +217,5 @@ const s = StyleSheet.create({
     paddingVertical: spacing.base, alignItems: 'center',
   },
   ctaAdded: { backgroundColor: '#4A8A5A' },
-  ctaText: { ...t.label, color: '#FFF', fontSize: 14 },
+  ctaText: { ...t.labelLg, color: '#FFF', fontSize: 14 },
 });

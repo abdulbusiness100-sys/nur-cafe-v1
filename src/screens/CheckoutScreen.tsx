@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, Alert, Switch,
+  TouchableOpacity, Alert, Switch, TextInput, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,8 +12,10 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { createOrder, awardPoints } from '../services/orders';
+import { createOrder, awardPoints, type OrderDiscounts } from '../services/orders';
+import { validateGiftCard, redeemGiftCard, type GiftCard } from '../services/giftCards';
 import { supabase } from '../config/supabase';
+import * as Haptics from 'expo-haptics';
 import colors from '../theme/colors';
 import { type as t } from '../theme/typography';
 import { spacing, radius, touchTarget, shadow } from '../theme/spacing';
@@ -33,17 +35,43 @@ export default function CheckoutScreen({ navigation }: Props) {
   const { user, profile, refreshProfile } = useAuth();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
-  const [loading, setLoading] = useState(false);
-  const [usePoints, setUsePoints] = useState(false);
+  const [loading,       setLoading]       = useState(false);
+  const [usePoints,     setUsePoints]     = useState(false);
+  const [gcCode,        setGcCode]        = useState('');
+  const [gcApplying,    setGcApplying]    = useState(false);
+  const [appliedGc,     setAppliedGc]     = useState<GiftCard | null>(null);
 
-  const availablePoints = profile?.points ?? 0;
-  const maxPointDiscount = parseFloat((availablePoints / POINTS_PER_POUND).toFixed(2));
-  const pointDiscount = usePoints ? Math.min(maxPointDiscount, totalPrice) : 0;
-  const pointsUsed = usePoints
+  const availablePoints   = profile?.points ?? 0;
+  const maxPointDiscount  = parseFloat((availablePoints / POINTS_PER_POUND).toFixed(2));
+  const pointDiscount     = usePoints ? Math.min(maxPointDiscount, totalPrice) : 0;
+  const pointsUsed        = usePoints
     ? Math.min(availablePoints, Math.ceil(totalPrice * POINTS_PER_POUND))
     : 0;
-  const finalTotal = Math.max(0, totalPrice - pointDiscount);
-  const pointsToEarn = Math.floor(finalTotal);
+  const gcDiscount        = appliedGc ? Math.min(appliedGc.value / 100, totalPrice - pointDiscount) : 0;
+  const finalTotal        = Math.max(0, totalPrice - pointDiscount - gcDiscount);
+  const pointsToEarn      = Math.floor(finalTotal);
+
+  const handleApplyGiftCard = async () => {
+    const trimmed = gcCode.trim();
+    if (!trimmed) return;
+    if (trimmed.length > 50) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Invalid Code', 'Please check your gift card code and try again.');
+      return;
+    }
+    setGcApplying(true);
+    try {
+      const card = await validateGiftCard(gcCode);
+      setAppliedGc(card);
+      setGcCode('');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Invalid Gift Card', e.message);
+    } finally {
+      setGcApplying(false);
+    }
+  };
 
   const handlePlaceOrder = async () => {
     if (!user || items.length === 0) return;
@@ -81,6 +109,7 @@ export default function CheckoutScreen({ navigation }: Props) {
       if (initError) throw new Error(initError.message);
 
       // 3 — present sheet to user
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       const { error: presentError } = await presentPaymentSheet();
       if (presentError) {
         if (presentError.code !== 'Canceled') {
@@ -91,13 +120,22 @@ export default function CheckoutScreen({ navigation }: Props) {
       }
 
       // 4 — payment confirmed — write order + adjust points
-      const order = await createOrder(user.id, items, totalPrice);
+      const discounts: OrderDiscounts = {
+        discountPoints:   usePoints ? pointsUsed : 0,
+        discountGcCode:   appliedGc?.code ?? null,
+        discountGcAmount: gcDiscount,
+      };
+      const order = await createOrder(user.id, items, totalPrice, discounts);
 
       if (pointsToEarn > 0) await awardPoints(user.id, pointsToEarn);
 
       // Deduct redeemed points (awardPoints handles the typed RPC call)
       if (usePoints && pointsUsed > 0) {
         await awardPoints(user.id, -pointsUsed);
+      }
+
+      if (appliedGc) {
+        await redeemGiftCard(appliedGc.code, user.id);
       }
 
       await refreshProfile();
@@ -170,7 +208,7 @@ export default function CheckoutScreen({ navigation }: Props) {
               </View>
               <Switch
                 value={usePoints}
-                onValueChange={setUsePoints}
+                onValueChange={(v) => { Haptics.selectionAsync(); setUsePoints(v); }}
                 trackColor={{ true: colors.brand, false: colors.border }}
                 thumbColor={colors.card}
               />
@@ -186,6 +224,45 @@ export default function CheckoutScreen({ navigation }: Props) {
           </View>
         )}
 
+        {/* Gift card redemption */}
+        <View style={[s.panel, { marginTop: spacing.sm }]}>
+          <Text style={s.panelLabel}>GIFT CARD</Text>
+          {appliedGc ? (
+            <View style={s.gcAppliedRow}>
+              <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+              <Text style={s.gcAppliedText}>
+                {appliedGc.code} · £{(appliedGc.value / 100).toFixed(2)} applied
+              </Text>
+              <TouchableOpacity onPress={() => setAppliedGc(null)}>
+                <Ionicons name="close-circle-outline" size={18} color={colors.muted} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={s.gcInputRow}>
+              <TextInput
+                style={s.gcInput}
+                placeholder="Enter code…"
+                placeholderTextColor={colors.muted}
+                value={gcCode}
+                onChangeText={(v) => setGcCode(v.toUpperCase())}
+                autoCapitalize="characters"
+                returnKeyType="done"
+                onSubmitEditing={handleApplyGiftCard}
+              />
+              <TouchableOpacity
+                style={[s.gcApplyBtn, gcApplying && { opacity: 0.6 }]}
+                onPress={handleApplyGiftCard}
+                disabled={gcApplying}
+              >
+                {gcApplying
+                  ? <ActivityIndicator size="small" color={colors.cream} />
+                  : <Text style={s.gcApplyText}>APPLY</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
         {/* Summary */}
         <View style={[s.panel, { marginTop: spacing.sm }]}>
           <Text style={s.panelLabel}>SUMMARY</Text>
@@ -197,6 +274,12 @@ export default function CheckoutScreen({ navigation }: Props) {
             <View style={s.summaryRow}>
               <Text style={[s.summaryLabel, { color: '#065F46' }]}>Points discount</Text>
               <Text style={[s.summaryValue, { color: '#065F46' }]}>−£{pointDiscount.toFixed(2)}</Text>
+            </View>
+          )}
+          {gcDiscount > 0 && (
+            <View style={s.summaryRow}>
+              <Text style={[s.summaryLabel, { color: '#065F46' }]}>Gift card</Text>
+              <Text style={[s.summaryValue, { color: '#065F46' }]}>−£{gcDiscount.toFixed(2)}</Text>
             </View>
           )}
           <View style={[s.summaryRow, { borderBottomWidth: 0 }]}>
@@ -258,7 +341,7 @@ const s = StyleSheet.create({
     overflow: 'hidden', ...shadow.sm,
   },
   panelLabel: {
-    ...t.label, color: colors.muted,
+    ...t.labelLg, color: colors.muted,
     paddingHorizontal: spacing.base,
     paddingTop: spacing.base, paddingBottom: spacing.sm,
     borderBottomWidth: 1, borderBottomColor: colors.border,
@@ -294,6 +377,33 @@ const s = StyleSheet.create({
   },
   discountBannerText: { ...t.caption, color: '#065F46' },
 
+  // Gift card
+  gcInputRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    paddingHorizontal: spacing.base, paddingVertical: spacing.md,
+  },
+  gcInput: {
+    flex: 1,
+    height: 44, borderRadius: radius.md,
+    backgroundColor: colors.card,
+    borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    fontFamily: 'Manrope_600SemiBold', fontSize: 14,
+    color: colors.text,
+  },
+  gcApplyBtn: {
+    height: 44, borderRadius: radius.md,
+    backgroundColor: colors.brand,
+    paddingHorizontal: spacing.base,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  gcApplyText: { fontFamily: 'Manrope_800ExtraBold', fontSize: 12, color: '#FFF', letterSpacing: 0.8 },
+  gcAppliedRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    paddingHorizontal: spacing.base, paddingVertical: spacing.md,
+  },
+  gcAppliedText: { ...t.body, color: colors.success, flex: 1 },
+
   summaryRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: spacing.base, paddingVertical: spacing.md,
@@ -326,6 +436,6 @@ const s = StyleSheet.create({
     borderRadius: radius.full,
     paddingVertical: spacing.base,
   },
-  payBtnText: { ...t.label, color: '#FFF', fontSize: 15 },
+  payBtnText: { ...t.labelLg, color: '#FFF', fontSize: 15 },
   secureNote: { ...t.caption, color: colors.muted, marginTop: spacing.sm },
 });

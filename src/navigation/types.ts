@@ -1,5 +1,6 @@
 // src/navigation/types.ts
 import type { MenuItem } from '../data/menu';
+import type { CategoryKey } from '../data/categories';
 
 export type RootStackParamList = {
   // Auth
@@ -8,6 +9,9 @@ export type RootStackParamList = {
 
   // Main
   RootTabs: undefined;
+
+  // Category drill-down
+  CategoryDetail: { category: CategoryKey; titleEn: string; titleAr: string };
 
   // Stack screens
   Profile: undefined;

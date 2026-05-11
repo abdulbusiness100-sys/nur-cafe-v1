@@ -148,7 +148,7 @@ const s = StyleSheet.create({
     backgroundColor: colors.brandSoft, borderRadius: radius.full,
     paddingHorizontal: spacing.md, paddingVertical: 4,
   },
-  statusText: { ...t.label, color: colors.brandDark },
+  statusText: { ...t.labelLg, color: colors.brandDark },
   dateText: { ...t.bodyLg, color: colors.subText },
   timeText: { ...t.caption, color: colors.muted },
 
@@ -162,7 +162,7 @@ const s = StyleSheet.create({
     ...shadow.sm,
   },
   panelLabel: {
-    ...t.label, color: colors.muted,
+    ...t.labelLg, color: colors.muted,
     paddingHorizontal: spacing.base,
     paddingTop: spacing.base, paddingBottom: spacing.sm,
     borderBottomWidth: 1, borderBottomColor: colors.border,
@@ -206,5 +206,5 @@ const s = StyleSheet.create({
     paddingVertical: spacing.base,
     borderWidth: 2, borderColor: colors.brand,
   },
-  reorderText: { ...t.label, color: colors.brand },
+  reorderText: { ...t.labelLg, color: colors.brand },
 });
