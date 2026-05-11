@@ -16,8 +16,8 @@ import { type as t } from '../theme/typography';
 import { spacing, radius, touchTarget, shadow } from '../theme/spacing';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
-const PRIVACY_URL = 'https://nurcafe.co.uk/privacy';
-const TERMS_URL   = 'https://nurcafe.co.uk/terms';
+const PRIVACY_URL = 'https://nurcafe-admin.vercel.app/privacy';
+const TERMS_URL   = 'https://nurcafe-admin.vercel.app/terms';
 
 export default function AccountScreen() {
   const nav = useNavigation();
