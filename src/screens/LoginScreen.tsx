@@ -16,6 +16,7 @@ import Animated, {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { signIn } from '../services/auth';
+import { supabase } from '../config/supabase';
 import colors from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { spacing, radius } from '../theme/spacing';
@@ -29,6 +30,9 @@ export default function LoginScreen({ navigation }: Props) {
   const [loading,     setLoading]     = useState(false);
   const [showPw,      setShowPw]      = useState(false);
   const [focusedFld,  setFocusedFld]  = useState<string | null>(null);
+  const [showForgot,  setShowForgot]  = useState(false);
+  const [resetEmail,  setResetEmail]  = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
   const pwRef = useRef<TI>(null);
 
   // ─── Sign-in button spring ──────────────────────────────────────────────────
@@ -57,6 +61,33 @@ export default function LoginScreen({ navigation }: Props) {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!resetEmail.trim()) {
+      Alert.alert('Enter your email', 'Please enter your email address first.');
+      return;
+    }
+    setResetLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        resetEmail.trim().toLowerCase(),
+      );
+      if (error) throw error;
+      Alert.alert(
+        'Check your email',
+        'A password reset link has been sent to your email address.',
+      );
+      setShowForgot(false);
+      setResetEmail('');
+    } catch {
+      Alert.alert(
+        'Error',
+        'Could not send reset email. Please check your email address.',
+      );
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={s.safe}
@@ -80,103 +111,178 @@ export default function LoginScreen({ navigation }: Props) {
           style={s.divider}
         />
 
-        {/* ── Email input ──────────────────────────────────────────────────── */}
-        <Animated.View
-          entering={FadeInDown.delay(160).springify()}
-          style={[s.inputWrap, focusedFld === 'email' && s.inputFocused]}
-        >
-          <Ionicons name="mail-outline" size={20} color={colors.muted} style={s.icon} />
-          <TextInput
-            style={s.input}
-            placeholder="Email address"
-            placeholderTextColor={colors.muted}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            returnKeyType="next"
-            value={email}
-            onChangeText={setEmail}
-            onFocus={() => setFocusedFld('email')}
-            onBlur={() => setFocusedFld(null)}
-            onSubmitEditing={() => pwRef.current?.focus()}
-          />
-        </Animated.View>
+        {showForgot ? (
+          <>
+            {/* ── Reset Password — Email input ─────────────────────────────── */}
+            <Animated.View
+              entering={FadeInDown.delay(120).springify()}
+              style={s.resetLabel}
+            >
+              <Text style={s.resetTitle}>Reset Password</Text>
+              <Text style={s.resetSubtitle}>
+                Enter your email and we'll send you a reset link.
+              </Text>
+            </Animated.View>
 
-        {/* ── Password input ───────────────────────────────────────────────── */}
-        <Animated.View
-          entering={FadeInDown.delay(220).springify()}
-          style={[s.inputWrap, focusedFld === 'password' && s.inputFocused]}
-        >
-          <Ionicons name="lock-closed-outline" size={20} color={colors.muted} style={s.icon} />
-          <TextInput
-            ref={pwRef}
-            style={s.input}
-            placeholder="Password"
-            placeholderTextColor={colors.muted}
-            secureTextEntry={!showPw}
-            returnKeyType="done"
-            value={password}
-            onChangeText={setPassword}
-            onFocus={() => setFocusedFld('password')}
-            onBlur={() => setFocusedFld(null)}
-            onSubmitEditing={handleLogin}
-          />
-          <TouchableOpacity
-            onPress={() => setShowPw((v) => !v)}
-            style={s.eyeBtn}
-            accessibilityLabel="Toggle password visibility"
-          >
-            <Ionicons
-              name={showPw ? 'eye-off-outline' : 'eye-outline'}
-              size={20}
-              color={colors.muted}
-            />
-          </TouchableOpacity>
-        </Animated.View>
+            <Animated.View
+              entering={FadeInDown.delay(180).springify()}
+              style={[s.inputWrap, focusedFld === 'resetEmail' && s.inputFocused]}
+            >
+              <Ionicons name="mail-outline" size={20} color={colors.muted} style={s.icon} />
+              <TextInput
+                style={s.input}
+                placeholder="Your email address"
+                placeholderTextColor={colors.muted}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                returnKeyType="done"
+                value={resetEmail}
+                onChangeText={setResetEmail}
+                onFocus={() => setFocusedFld('resetEmail')}
+                onBlur={() => setFocusedFld(null)}
+                onSubmitEditing={handleForgotPassword}
+              />
+            </Animated.View>
 
-        {/* ── Forgot password ──────────────────────────────────────────────── */}
-        <Animated.View
-          entering={FadeInDown.delay(260).springify()}
-          style={s.forgotRow}
-        >
-          <TouchableOpacity activeOpacity={0.7}>
-            <Text style={s.forgotText}>Forgot password?</Text>
-          </TouchableOpacity>
-        </Animated.View>
+            {/* ── Send Reset Link button ───────────────────────────────────── */}
+            <Animated.View
+              entering={FadeInDown.delay(240).springify()}
+              style={btnStyle}
+            >
+              <Pressable
+                style={[s.btn, resetLoading && s.btnDisabled]}
+                disabled={resetLoading}
+                onPressIn={() => { btnScale.value = withSpring(0.97, springs.button); }}
+                onPressOut={() => { btnScale.value = withSpring(1.0, springs.button); }}
+                onPress={handleForgotPassword}
+              >
+                {resetLoading
+                  ? <ActivityIndicator color={colors.terracotta} />
+                  : <Text style={s.btnText}>SEND RESET LINK</Text>
+                }
+              </Pressable>
+            </Animated.View>
 
-        {/* ── Sign in button ───────────────────────────────────────────────── */}
-        <Animated.View
-          entering={FadeInDown.delay(300).springify()}
-          style={btnStyle}
-        >
-          <Pressable
-            style={[s.btn, loading && s.btnDisabled]}
-            disabled={loading}
-            onPressIn={() => { btnScale.value = withSpring(0.97, springs.button); }}
-            onPressOut={() => { btnScale.value = withSpring(1.0, springs.button); }}
-            onPress={handleLogin}
-          >
-            {loading
-              ? <ActivityIndicator color={colors.terracotta} />
-              : <Text style={s.btnText}>SIGN IN</Text>
-            }
-          </Pressable>
-        </Animated.View>
+            {/* ── Back to Sign In ──────────────────────────────────────────── */}
+            <Animated.View
+              entering={FadeInDown.delay(300).springify()}
+              style={s.footer}
+            >
+              <TouchableOpacity
+                onPress={() => { setShowForgot(false); setResetEmail(''); }}
+                activeOpacity={0.75}
+              >
+                <Text style={s.footerText}>
+                  {'← '}
+                  <Text style={s.footerBold}>Back to Sign In</Text>
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </>
+        ) : (
+          <>
+            {/* ── Email input ────────────────────────────────────────────── */}
+            <Animated.View
+              entering={FadeInDown.delay(160).springify()}
+              style={[s.inputWrap, focusedFld === 'email' && s.inputFocused]}
+            >
+              <Ionicons name="mail-outline" size={20} color={colors.muted} style={s.icon} />
+              <TextInput
+                style={s.input}
+                placeholder="Email address"
+                placeholderTextColor={colors.muted}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                returnKeyType="next"
+                value={email}
+                onChangeText={setEmail}
+                onFocus={() => setFocusedFld('email')}
+                onBlur={() => setFocusedFld(null)}
+                onSubmitEditing={() => pwRef.current?.focus()}
+              />
+            </Animated.View>
 
-        {/* ── Footer ──────────────────────────────────────────────────────── */}
-        <Animated.View
-          entering={FadeInDown.delay(380).springify()}
-          style={s.footer}
-        >
-          <TouchableOpacity
-            onPress={() => navigation.navigate('SignUp')}
-            activeOpacity={0.75}
-          >
-            <Text style={s.footerText}>
-              Don't have an account?{'  '}
-              <Text style={s.footerBold}>Sign up</Text>
-            </Text>
-          </TouchableOpacity>
-        </Animated.View>
+            {/* ── Password input ─────────────────────────────────────────── */}
+            <Animated.View
+              entering={FadeInDown.delay(220).springify()}
+              style={[s.inputWrap, focusedFld === 'password' && s.inputFocused]}
+            >
+              <Ionicons name="lock-closed-outline" size={20} color={colors.muted} style={s.icon} />
+              <TextInput
+                ref={pwRef}
+                style={s.input}
+                placeholder="Password"
+                placeholderTextColor={colors.muted}
+                secureTextEntry={!showPw}
+                returnKeyType="done"
+                value={password}
+                onChangeText={setPassword}
+                onFocus={() => setFocusedFld('password')}
+                onBlur={() => setFocusedFld(null)}
+                onSubmitEditing={handleLogin}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPw((v) => !v)}
+                style={s.eyeBtn}
+                accessibilityLabel="Toggle password visibility"
+              >
+                <Ionicons
+                  name={showPw ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={colors.muted}
+                />
+              </TouchableOpacity>
+            </Animated.View>
+
+            {/* ── Forgot password ────────────────────────────────────────── */}
+            <Animated.View
+              entering={FadeInDown.delay(260).springify()}
+              style={s.forgotRow}
+            >
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => setShowForgot(true)}
+              >
+                <Text style={s.forgotText}>Forgot password?</Text>
+              </TouchableOpacity>
+            </Animated.View>
+
+            {/* ── Sign in button ─────────────────────────────────────────── */}
+            <Animated.View
+              entering={FadeInDown.delay(300).springify()}
+              style={btnStyle}
+            >
+              <Pressable
+                style={[s.btn, loading && s.btnDisabled]}
+                disabled={loading}
+                onPressIn={() => { btnScale.value = withSpring(0.97, springs.button); }}
+                onPressOut={() => { btnScale.value = withSpring(1.0, springs.button); }}
+                onPress={handleLogin}
+              >
+                {loading
+                  ? <ActivityIndicator color={colors.terracotta} />
+                  : <Text style={s.btnText}>SIGN IN</Text>
+                }
+              </Pressable>
+            </Animated.View>
+
+            {/* ── Footer ────────────────────────────────────────────────── */}
+            <Animated.View
+              entering={FadeInDown.delay(380).springify()}
+              style={s.footer}
+            >
+              <TouchableOpacity
+                onPress={() => navigation.navigate('SignUp')}
+                activeOpacity={0.75}
+              >
+                <Text style={s.footerText}>
+                  Don't have an account?{'  '}
+                  <Text style={s.footerBold}>Sign up</Text>
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </>
+        )}
 
       </View>
     </KeyboardAvoidingView>
@@ -226,6 +332,25 @@ const s = StyleSheet.create({
     backgroundColor: colors.cream,
     opacity:         0.15,
     marginBottom:    spacing['2xl'],
+  },
+
+  // ─── Forgot / Reset section ──────────────────────────────────────────────
+  resetLabel: {
+    marginBottom: spacing.base,
+  },
+  resetTitle: {
+    fontFamily:    fonts.extrabold,
+    fontSize:      22,
+    color:         colors.cream,
+    letterSpacing: 0.5,
+    marginBottom:  6,
+  },
+  resetSubtitle: {
+    fontFamily: fonts.medium,
+    fontSize:   14,
+    color:      colors.cream,
+    opacity:    0.7,
+    lineHeight: 20,
   },
 
   // ─── Inputs ──────────────────────────────────────────────────────────────

@@ -30,16 +30,16 @@ const colors = {
   silver:          '#94A3B8', // Silver tier badge
   gold:            '#F59E0B', // Gold tier badge — warm amber
 
-  // ─── Legacy aliases (backward compat) ────────────────────
-  bg:              '#9C5148', // alias → terracotta
-  card:            '#EFE5D8', // alias → cream
+  // ─── Semantic aliases — all point to the warm palette ────
+  bg:              '#F7F2EB', // alias → sand   (page backgrounds)
+  card:            '#EFE5D8', // alias → cream  (card / input surfaces)
   brand:           '#9C5148', // alias → terracotta
   brandDark:       '#7E3E37', // alias → terracottaDark
-  brandSoft:       '#F1DDD7', // legacy soft tint
-  text:            '#2B1810', // alias → deepBrown
-  onBrand:         '#FAF6F1', // text on terracotta backgrounds
+  brandSoft:       '#9C514818', // terracotta at ~10% opacity — soft tint
+  text:            '#2B1810', // alias → deepBrown (primary body text)
+  onBrand:         '#2B1810', // text / icons on sand page background → deepBrown
   border:          '#E0CDB8', // alias → creamDeep
-  shadow:          '#000',
+  shadow:          '#2B1810', // warm shadow tint
   ctaTextOnBrand:  '#FFFFFF',
 };
 

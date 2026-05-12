@@ -12,6 +12,8 @@ import type { RootStackParamList } from '../navigation/types';
 import { getOrder, ORDER_STATUS_LABELS } from '../services/orders';
 import type { Order, OrderStatus } from '../types/database';
 import type { OrderItem } from '../services/orders';
+import { useCart } from '../context/CartContext';
+import { menu } from '../data/menu';
 import colors from '../theme/colors';
 import { type as t } from '../theme/typography';
 import { spacing, radius, touchTarget, shadow } from '../theme/spacing';
@@ -22,6 +24,7 @@ export default function OrderDetailScreen({ navigation, route }: Props) {
   const { orderId } = route.params;
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+  const { addItem, clearCart } = useCart();
 
   useEffect(() => {
     getOrder(orderId).then((o) => { setOrder(o); setLoading(false); });
@@ -84,8 +87,30 @@ export default function OrderDetailScreen({ navigation, route }: Props) {
         <Animated.View entering={FadeInDown.delay(200).springify()} style={[s.panel, { marginTop: spacing.sm }]}>
           <Text style={s.panelLabel}>SUMMARY</Text>
           <View style={s.summaryRow}>
-            <Text style={s.summaryLabel}>Total</Text>
+            <Text style={s.summaryLabel}>Subtotal</Text>
             <Text style={s.summaryValue}>£{Number(order?.subtotal ?? 0).toFixed(2)}</Text>
+          </View>
+          {((order as any)?.discount_points ?? 0) > 0 && (
+            <View style={s.summaryRow}>
+              <Text style={[s.summaryLabel, { color: '#065F46' }]}>Points discount</Text>
+              <Text style={[s.summaryValue, { color: '#065F46' }]}>
+                −£{Number((order as any).discount_points / 100).toFixed(2)}
+              </Text>
+            </View>
+          )}
+          {((order as any)?.discount_gc_amount ?? 0) > 0 && (
+            <View style={s.summaryRow}>
+              <Text style={[s.summaryLabel, { color: '#065F46' }]}>Gift card</Text>
+              <Text style={[s.summaryValue, { color: '#065F46' }]}>
+                −£{Number((order as any).discount_gc_amount).toFixed(2)}
+              </Text>
+            </View>
+          )}
+          <View style={s.summaryRow}>
+            <Text style={[s.summaryLabel, { fontFamily: 'Manrope_800ExtraBold', color: colors.text }]}>Total paid</Text>
+            <Text style={[s.summaryValue, { fontSize: 18 }]}>
+              £{Number((order as any)?.final_total ?? order?.subtotal ?? 0).toFixed(2)}
+            </Text>
           </View>
           <View style={[s.summaryRow, { borderBottomWidth: 0 }]}>
             <Text style={s.summaryLabel}>Points earned</Text>
@@ -113,10 +138,17 @@ export default function OrderDetailScreen({ navigation, route }: Props) {
           <TouchableOpacity
             style={s.reorderBtn}
             activeOpacity={0.9}
-            onPress={() => navigation.reset({ index: 0, routes: [{ name: 'RootTabs', params: { screen: 'Order' } }] })}
+            onPress={() => {
+              clearCart();
+              items.forEach((oi) => {
+                const menuItem = menu.find((m) => m.id === oi.itemId);
+                if (menuItem) addItem(menuItem, oi.extras, oi.extraTotal);
+              });
+              navigation.navigate('Cart');
+            }}
           >
             <Ionicons name="refresh" size={16} color={colors.brand} />
-            <Text style={s.reorderText}>ORDER AGAIN</Text>
+            <Text style={s.reorderText}>REORDER</Text>
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>

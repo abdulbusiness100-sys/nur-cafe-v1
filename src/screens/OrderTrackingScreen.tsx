@@ -91,7 +91,7 @@ export default function OrderTrackingScreen({ navigation, route }: Props) {
               style={s.stepRow}
             >
               <View style={[s.stepDot, done && s.stepDotDone, active && s.stepDotActive]}>
-                {done && <Ionicons name="checkmark" size={12} color={colors.onBrand} />}
+                {done && <Ionicons name="checkmark" size={12} color={colors.cream} />}
               </View>
               {i < ORDER_STATUS_STEPS.length - 1 && (
                 <View style={[s.stepLine, done && i < currentStepIndex && s.stepLineDone]} />

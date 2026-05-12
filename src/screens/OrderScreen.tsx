@@ -1,6 +1,4 @@
 // src/screens/OrderScreen.tsx
-// Phase 4 — CategoryGrid landing: 3×N tiles, bilingual labels, float + spring animations
-import { useEffect } from 'react';
 import {
   View, Text, FlatList, Pressable, StyleSheet, Dimensions, TouchableOpacity,
 } from 'react-native';
@@ -10,11 +8,6 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withRepeat,
-  withSequence,
-  withTiming,
-  withDelay,
-  Easing,
 } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -55,26 +48,7 @@ function CategoryCell({
   index: number;
   onPress: () => void;
 }) {
-  const floatY    = useSharedValue(0);
   const pressScale = useSharedValue(1);
-
-  useEffect(() => {
-    floatY.value = withDelay(
-      index * 180,
-      withRepeat(
-        withSequence(
-          withTiming(-3, { duration: 1250, easing: Easing.inOut(Easing.sin) }),
-          withTiming( 3, { duration: 1250, easing: Easing.inOut(Easing.sin) }),
-        ),
-        -1,
-        false,
-      ),
-    );
-  }, []);
-
-  const floatStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: floatY.value }],
-  }));
   const pressStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pressScale.value }],
   }));
@@ -96,20 +70,14 @@ function CategoryCell({
         accessibilityRole="button"
         accessibilityLabel={`${cat.en} category`}
       >
-        {/* Icon with float */}
-        <Animated.View style={[s.iconWrap, floatStyle]}>
+        <View style={s.iconWrap}>
           <Ionicons
             name={CATEGORY_ICONS[cat.key] ?? 'cafe-outline'}
             size={36}
             color={colors.terracotta}
           />
-        </Animated.View>
-
-        {/* English label */}
+        </View>
         <Text style={s.cellEn} numberOfLines={1}>{cat.en}</Text>
-
-        {/* Arabic label */}
-        <Text style={s.cellAr} numberOfLines={1}>{cat.ar}</Text>
       </Pressable>
     </Animated.View>
   );
@@ -144,7 +112,6 @@ export default function OrderScreen() {
             <View style={s.topBar}>
               <View style={{ flex: 1 }}>
                 <Text style={s.headingEn}>What would you like?</Text>
-                <Text style={s.headingAr}>اختر من قائمتنا</Text>
               </View>
               <TouchableOpacity
                 onPress={() => nav.navigate('Cart')}
@@ -204,13 +171,6 @@ const s = StyleSheet.create({
     fontSize:   22,
     color:      colors.deepBrown,
     lineHeight: 28,
-  },
-  headingAr: {
-    fontFamily: fonts.amiri,
-    fontSize:   16,
-    color:      colors.terracottaDark,
-    textAlign:  'right',
-    marginTop:  2,
   },
   cartBtn: {
     width:           44,
@@ -274,13 +234,5 @@ const s = StyleSheet.create({
     color:      colors.deepBrown,
     textAlign:  'center',
     lineHeight: 16,
-  },
-  cellAr: {
-    fontFamily: fonts.amiri,
-    fontSize:   12,
-    color:      colors.terracottaDark,
-    textAlign:  'center',
-    lineHeight: 18,
-    marginTop:  2,
   },
 });

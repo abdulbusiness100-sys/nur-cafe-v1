@@ -108,6 +108,7 @@ export default function AdminDashboardScreen() {
         title:      'Your order is ready ☕',
         body:       'Head to the counter to collect your order.',
         type:       'order_ready',
+        order_id:   order.id,
         read:       false,
         created_at: new Date().toISOString(),
       });

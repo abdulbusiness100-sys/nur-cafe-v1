@@ -79,7 +79,7 @@ export default function CartScreen({ navigation }: Props) {
               <View style={s.stepper}>
                 <TouchableOpacity
                   style={s.stepBtn}
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); decrementItem(ci.item.id); }}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); decrementItem(ci.item.id, ci.extras); }}
                   accessibilityLabel="Decrease quantity"
                 >
                   <Ionicons name="remove" size={18} color={colors.brand} />
@@ -87,7 +87,7 @@ export default function CartScreen({ navigation }: Props) {
                 <Text style={s.qty}>{ci.quantity}</Text>
                 <TouchableOpacity
                   style={s.stepBtn}
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); incrementItem(ci.item.id); }}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); incrementItem(ci.item.id, ci.extras); }}
                   accessibilityLabel="Increase quantity"
                 >
                   <Ionicons name="add" size={18} color={colors.brand} />
@@ -127,7 +127,7 @@ export default function CartScreen({ navigation }: Props) {
           <Text style={s.checkoutText}>
             PROCEED TO CHECKOUT  •  £{totalPrice.toFixed(2)}
           </Text>
-          <Ionicons name="arrow-forward" size={16} color={colors.brand} />
+          <Ionicons name="arrow-forward" size={16} color={colors.cream} />
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -229,11 +229,10 @@ const s = StyleSheet.create({
   },
   checkoutBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
-    backgroundColor: colors.card, borderRadius: radius.full,
+    backgroundColor: colors.brand, borderRadius: radius.full,
     paddingVertical: spacing.base,
-    borderWidth: 2, borderColor: colors.brand,
   },
-  checkoutText: { ...t.labelLg, color: colors.brand, fontSize: 14 },
+  checkoutText: { ...t.labelLg, color: colors.cream, fontSize: 14 },
 
   // Empty state
   empty: {

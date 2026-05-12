@@ -58,7 +58,7 @@ export default function OrderConfirmationScreen({ navigation, route }: Props) {
         {/* Animated tick */}
         <Animated.View style={[s.iconWrap, iconStyle]}>
           <View style={s.iconCircle}>
-            <Ionicons name="checkmark" size={52} color={colors.onBrand} />
+            <Ionicons name="checkmark" size={52} color={colors.cream} />
           </View>
         </Animated.View>
 
@@ -136,7 +136,7 @@ const s = StyleSheet.create({
     width: 120, height: 120, borderRadius: 60,
     backgroundColor: colors.brandDark,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 4, borderColor: colors.onBrand,
+    borderWidth: 4, borderColor: colors.cream,
     ...shadow.card,
   },
 

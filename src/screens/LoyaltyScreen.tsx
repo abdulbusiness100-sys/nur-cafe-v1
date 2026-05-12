@@ -1,8 +1,9 @@
 // src/screens/LoyaltyScreen.tsx
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import colors from '../theme/colors';
 import { spacing, radius, shadow } from '../theme/spacing';
@@ -19,8 +20,8 @@ type TierKey = keyof typeof TIERS;
 
 const TIER_PERKS: Record<TierKey, string[]> = {
   bronze: ['Earn 1pt per £1 spent', 'Birthday bonus points', 'Early access to new drinks'],
-  silver: ['Everything in Bronze', '1.25x points multiplier', 'Free size upgrade once a month'],
-  gold:   ['Everything in Silver', '1.5x points multiplier', 'Free drink on your birthday', 'Priority ordering'],
+  silver: ['Everything in Bronze', '1.25x points multiplier', 'Earn 25% more points on every order'],
+  gold:   ['Everything in Silver', '1.5x points multiplier', 'Free drink on your birthday', 'Exclusive access to new seasonal drinks'],
 };
 
 const TIER_STEPS: { key: TierKey; threshold: number }[] = [
@@ -30,6 +31,7 @@ const TIER_STEPS: { key: TierKey; threshold: number }[] = [
 ];
 
 export default function LoyaltyScreen() {
+  const nav = useNavigation();
   const { profile } = useAuth();
   const points   = profile?.points ?? 0;
   const tier     = ((profile?.tier ?? 'bronze') as TierKey);
@@ -159,6 +161,17 @@ export default function LoyaltyScreen() {
               );
             })}
           </View>
+        </Animated.View>
+
+        {/* Start earning CTA */}
+        <Animated.View entering={FadeInDown.delay(360).springify()} style={{ paddingHorizontal: spacing.base, marginTop: spacing.lg }}>
+          <TouchableOpacity
+            style={{ backgroundColor: colors.brand, borderRadius: radius.full, paddingVertical: spacing.base, alignItems: 'center' }}
+            onPress={() => (nav as any).navigate('Order')}
+            activeOpacity={0.9}
+          >
+            <Text style={{ fontFamily: 'Manrope_800ExtraBold', fontSize: 13, color: '#FFF', letterSpacing: 1.5 }}>START EARNING POINTS</Text>
+          </TouchableOpacity>
         </Animated.View>
 
       </ScrollView>

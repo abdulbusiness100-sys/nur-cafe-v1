@@ -87,7 +87,6 @@ export default function CategoryDetailScreen({ route }: Props) {
 
         <View style={s.titleBlock}>
           <Text style={s.titleEn}>{titleEn}</Text>
-          <Text style={s.titleAr}>{titleAr}</Text>
         </View>
 
         <TouchableOpacity
@@ -212,12 +211,6 @@ const s = StyleSheet.create({
     fontSize:   18,
     color:      colors.deepBrown,
     lineHeight: 22,
-  },
-  titleAr: {
-    fontFamily: fonts.amiri,
-    fontSize:   14,
-    color:      colors.terracottaDark,
-    lineHeight: 20,
   },
   searchToggle: {
     width:           40,

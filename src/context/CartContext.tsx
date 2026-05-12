@@ -14,8 +14,8 @@ type CartContextValue = {
   items: CartItem[];
   addItem: (item: MenuItem, extras?: string[], extraTotal?: number) => void;
   removeItem: (itemId: string) => void;
-  incrementItem: (itemId: string) => void;
-  decrementItem: (itemId: string) => void;
+  incrementItem: (itemId: string, extras?: string[]) => void;
+  decrementItem: (itemId: string, extras?: string[]) => void;
   clearCart: () => void;
   totalItems: number;
   totalPrice: number;
@@ -64,18 +64,30 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems((prev) => prev.filter((ci) => ci.item.id !== itemId));
   }, []);
 
-  const incrementItem = useCallback((itemId: string) => {
-    setItems((prev) =>
-      prev.map((ci) => (ci.item.id === itemId ? { ...ci, quantity: ci.quantity + 1 } : ci)),
-    );
+  const incrementItem = useCallback((itemId: string, extras?: string[]) => {
+    setItems((prev) => {
+      const extraKey = extras ? extras.slice().sort().join('|') : null;
+      return prev.map((ci) => {
+        const idMatch = ci.item.id === itemId;
+        const extrasMatch =
+          extraKey === null || ci.extras.slice().sort().join('|') === extraKey;
+        return idMatch && extrasMatch ? { ...ci, quantity: ci.quantity + 1 } : ci;
+      });
+    });
   }, []);
 
-  const decrementItem = useCallback((itemId: string) => {
-    setItems((prev) =>
-      prev
-        .map((ci) => (ci.item.id === itemId ? { ...ci, quantity: ci.quantity - 1 } : ci))
-        .filter((ci) => ci.quantity > 0),
-    );
+  const decrementItem = useCallback((itemId: string, extras?: string[]) => {
+    setItems((prev) => {
+      const extraKey = extras ? extras.slice().sort().join('|') : null;
+      return prev
+        .map((ci) => {
+          const idMatch = ci.item.id === itemId;
+          const extrasMatch =
+            extraKey === null || ci.extras.slice().sort().join('|') === extraKey;
+          return idMatch && extrasMatch ? { ...ci, quantity: ci.quantity - 1 } : ci;
+        })
+        .filter((ci) => ci.quantity > 0);
+    });
   }, []);
 
   const clearCart = useCallback(() => setItems([]), []);

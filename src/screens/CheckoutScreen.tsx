@@ -42,14 +42,24 @@ export default function CheckoutScreen({ navigation }: Props) {
   const [appliedGc,     setAppliedGc]     = useState<GiftCard | null>(null);
 
   const availablePoints   = profile?.points ?? 0;
+  const walletBalance     = profile?.wallet_balance ?? 0;
   const maxPointDiscount  = parseFloat((availablePoints / POINTS_PER_POUND).toFixed(2));
   const pointDiscount     = usePoints ? Math.min(maxPointDiscount, totalPrice) : 0;
   const pointsUsed        = usePoints
     ? Math.min(availablePoints, Math.ceil(totalPrice * POINTS_PER_POUND))
     : 0;
-  const gcDiscount        = appliedGc ? Math.min(appliedGc.value / 100, totalPrice - pointDiscount) : 0;
-  const finalTotal        = Math.max(0, totalPrice - pointDiscount - gcDiscount);
-  const pointsToEarn      = Math.floor(finalTotal);
+  const walletDiscount    = Math.min(walletBalance, totalPrice - pointDiscount);
+  const gcDiscount        = appliedGc ? Math.min(appliedGc.value / 100, totalPrice - pointDiscount - walletDiscount) : 0;
+  const finalTotal        = Math.max(0, totalPrice - pointDiscount - walletDiscount - gcDiscount);
+
+  const TIER_MULTIPLIER: Record<string, number> = {
+    bronze: 1.0,
+    silver: 1.25,
+    gold:   1.5,
+  };
+  const userTier      = profile?.tier ?? 'bronze';
+  const multiplier    = TIER_MULTIPLIER[userTier] ?? 1.0;
+  const pointsToEarn  = Math.floor(finalTotal * multiplier);
 
   const handleApplyGiftCard = async () => {
     const trimmed = gcCode.trim();
@@ -127,15 +137,19 @@ export default function CheckoutScreen({ navigation }: Props) {
       };
       const order = await createOrder(user.id, items, totalPrice, discounts);
 
-      if (pointsToEarn > 0) await awardPoints(user.id, pointsToEarn);
-
-      // Deduct redeemed points (awardPoints handles the typed RPC call)
-      if (usePoints && pointsUsed > 0) {
-        await awardPoints(user.id, -pointsUsed);
-      }
+      // Atomic net points adjustment — earn and redeem in one RPC call
+      const netPoints = pointsToEarn - (usePoints ? pointsUsed : 0);
+      if (netPoints !== 0) await awardPoints(user.id, netPoints);
 
       if (appliedGc) {
         await redeemGiftCard(appliedGc.code, user.id);
+      }
+
+      // Deduct wallet balance used in this order
+      if (walletDiscount > 0) {
+        await (supabase as any).from('profiles').update({
+          wallet_balance: walletBalance - walletDiscount,
+        }).eq('id', user.id);
       }
 
       await refreshProfile();
@@ -194,6 +208,20 @@ export default function CheckoutScreen({ navigation }: Props) {
             </View>
           ))}
         </View>
+
+        {/* Wallet balance — auto-applied, shown if user has a balance */}
+        {walletBalance > 0 && (
+          <View style={[s.panel, { marginTop: spacing.sm }]}>
+            <Text style={s.panelLabel}>WALLET BALANCE</Text>
+            <View style={s.pointsRow}>
+              <Ionicons name="wallet-outline" size={18} color={colors.brand} />
+              <View style={{ flex: 1, marginLeft: spacing.md }}>
+                <Text style={s.pointsLabel}>£{walletBalance.toFixed(2)} available</Text>
+                <Text style={s.pointsSub}>Will be applied automatically to your order.</Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Points redemption — only shown if user has enough */}
         {availablePoints >= POINTS_PER_POUND && (
@@ -274,6 +302,12 @@ export default function CheckoutScreen({ navigation }: Props) {
             <View style={s.summaryRow}>
               <Text style={[s.summaryLabel, { color: '#065F46' }]}>Points discount</Text>
               <Text style={[s.summaryValue, { color: '#065F46' }]}>−£{pointDiscount.toFixed(2)}</Text>
+            </View>
+          )}
+          {walletDiscount > 0 && (
+            <View style={s.summaryRow}>
+              <Text style={[s.summaryLabel, { color: '#065F46' }]}>Wallet credit</Text>
+              <Text style={[s.summaryValue, { color: '#065F46' }]}>−£{walletDiscount.toFixed(2)}</Text>
             </View>
           )}
           {gcDiscount > 0 && (

@@ -79,11 +79,11 @@ export default function AccountScreen() {
           onPress: () => {
             Alert.alert(
               'Are you absolutely sure?',
-              'Type DELETE to confirm — your account will be gone immediately.',
+              'This is your final confirmation. Tap "Delete" to permanently remove your account, order history, and loyalty points.',
               [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                  text: 'Yes, delete it',
+                  text: 'Delete',
                   style: 'destructive',
                   onPress: confirmDelete,
                 },

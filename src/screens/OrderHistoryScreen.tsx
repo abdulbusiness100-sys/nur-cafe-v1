@@ -85,7 +85,7 @@ export default function OrderHistoryScreen({ navigation }: Props) {
             </View>
           </View>
           <View style={s.cardBottom}>
-            <Text style={s.cardTotal}>£{Number(order.subtotal).toFixed(2)}</Text>
+            <Text style={s.cardTotal}>£{Number((order as any).final_total ?? order.subtotal).toFixed(2)}</Text>
             <View style={s.pointsRow}>
               <Ionicons name="star" size={12} color={colors.warning} />
               <Text style={s.pointsText}> {order.total_points} pts</Text>

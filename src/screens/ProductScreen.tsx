@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Image, Pressable,
+  Image, Pressable, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { resolveImage } from '../utils/imageHelper';
 import type { RootStackParamList } from '../navigation/types';
+import { getAllowedOptionIds } from '../data/productExtras';
 import colors from '../theme/colors';
 import { spacing, radius, shadow, touchTarget } from '../theme/spacing';
 import { type as t } from '../theme/typography';
@@ -40,28 +41,58 @@ const EXTRAS: Opt[] = [
 
 const ALL_OPTS = [...MILK, ...SYRUP, ...EXTRAS];
 
+const SIZE: Opt[] = [
+  { id: 'size-regular', label: 'Regular', price: 0   },
+  { id: 'size-large',   label: 'Large',   price: 1.0 },
+];
+
 export default function ProductScreen({ route, navigation }: Props) {
   const { item } = route.params;
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [selectedSize, setSelectedSize] = useState<string>('size-regular');
+  const [notes, setNotes] = useState('');
   const [added, setAdded] = useState(false);
   const { addItem } = useCart();
 
+  const isJuice = item.category === 'juices';
+
   const toggle = (id: string) => setSelected((s) => ({ ...s, [id]: !s[id] }));
 
-  const extraTotal = useMemo(
-    () => ALL_OPTS.reduce((sum, o) => (selected[o.id] ? sum + o.price : sum), 0),
-    [selected],
+  const allowedIds = useMemo(
+    () => new Set(getAllowedOptionIds(item.category, item.id)),
+    [item.category, item.id],
   );
 
-  const selectedLabels = useMemo(
-    () => ALL_OPTS.filter((o) => selected[o.id]).map((o) => o.label),
-    [selected],
-  );
+  const allowedMilk   = MILK.filter((o) => allowedIds.has(o.id));
+  const allowedSyrup  = SYRUP.filter((o) => allowedIds.has(o.id));
+  const allowedExtras = EXTRAS.filter((o) => allowedIds.has(o.id));
+
+  const extraTotal = useMemo(() => {
+    const optsTotal = ALL_OPTS
+      .filter((o) => allowedIds.has(o.id))
+      .reduce((sum, o) => (selected[o.id] ? sum + o.price : sum), 0);
+    const sizeExtra = isJuice ? (SIZE.find((s) => s.id === selectedSize)?.price ?? 0) : 0;
+    return optsTotal + sizeExtra;
+  }, [selected, allowedIds, selectedSize, isJuice]);
+
+  const selectedLabels = useMemo(() => {
+    const extraLabels = ALL_OPTS
+      .filter((o) => allowedIds.has(o.id) && selected[o.id])
+      .map((o) => o.label);
+    if (isJuice) {
+      const sizeLabel = SIZE.find((s) => s.id === selectedSize)?.label ?? 'Regular';
+      return [sizeLabel, ...extraLabels];
+    }
+    return extraLabels;
+  }, [selected, allowedIds, selectedSize, isJuice]);
 
   const total = (item.price + extraTotal).toFixed(2);
 
   const handleAddToOrder = () => {
-    addItem(item, selectedLabels, extraTotal);
+    const allExtras = notes.trim()
+      ? [...selectedLabels, `Note: ${notes.trim()}`]
+      : selectedLabels;
+    addItem(item, allExtras, extraTotal);
     setAdded(true);
     setTimeout(() => navigation.goBack(), 700);
   };
@@ -98,14 +129,51 @@ export default function ProductScreen({ route, navigation }: Props) {
         </Animated.View>
 
         {/* Customisation sections */}
-        <Animated.View entering={FadeInDown.delay(120).springify()}>
-          <OptSection title="Milk" data={MILK} selected={selected} toggle={toggle} />
-        </Animated.View>
-        <Animated.View entering={FadeInDown.delay(180).springify()}>
-          <OptSection title="Syrup" data={SYRUP} selected={selected} toggle={toggle} />
-        </Animated.View>
-        <Animated.View entering={FadeInDown.delay(240).springify()}>
-          <OptSection title="Extras" data={EXTRAS} selected={selected} toggle={toggle} />
+        {isJuice && (
+          <Animated.View entering={FadeInDown.delay(100).springify()}>
+            <SizeSection data={SIZE} selectedId={selectedSize} onSelect={setSelectedSize} />
+          </Animated.View>
+        )}
+        {allowedMilk.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(120).springify()}>
+            <OptSection title="Milk" data={allowedMilk} selected={selected} toggle={toggle} />
+          </Animated.View>
+        )}
+        {allowedSyrup.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(180).springify()}>
+            <OptSection title="Syrup" data={allowedSyrup} selected={selected} toggle={toggle} />
+          </Animated.View>
+        )}
+        {allowedExtras.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(240).springify()}>
+            <OptSection title="Extras" data={allowedExtras} selected={selected} toggle={toggle} />
+          </Animated.View>
+        )}
+        {!isJuice && allowedMilk.length === 0 && allowedSyrup.length === 0 && allowedExtras.length === 0 && (
+          <View style={{ paddingHorizontal: spacing.base, paddingVertical: spacing.md }}>
+            <Text style={{ fontFamily: 'Manrope_400Regular', fontSize: 14, color: colors.muted, textAlign: 'center' }}>
+              This item has no customisation options.
+            </Text>
+          </View>
+        )}
+
+        {/* Special instructions */}
+        <Animated.View entering={FadeInDown.delay(300).springify()}>
+          <View style={[s.section, { marginBottom: spacing.xl }]}>
+            <Text style={s.sectionTitle}>Special Instructions</Text>
+            <TextInput
+              style={s.notesInput}
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="E.g. extra hot, no foam, allergy note..."
+              placeholderTextColor={colors.muted}
+              multiline
+              numberOfLines={3}
+              maxLength={200}
+              returnKeyType="done"
+              blurOnSubmit
+            />
+          </View>
         </Animated.View>
       </ScrollView>
 
@@ -159,6 +227,37 @@ function OptSection({
   );
 }
 
+function SizeSection({
+  data,
+  selectedId,
+  onSelect,
+}: {
+  data: Opt[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <View style={s.section}>
+      <Text style={s.sectionTitle}>Size</Text>
+      {data.map((o, i) => (
+        <TouchableOpacity
+          key={o.id}
+          onPress={() => onSelect(o.id)}
+          style={[s.optRow, i < data.length - 1 && s.optBorder]}
+          activeOpacity={0.8}
+        >
+          {/* Radio dot */}
+          <View style={[s.radio, selectedId === o.id && s.radioOn]}>
+            {selectedId === o.id && <View style={s.radioDot} />}
+          </View>
+          <Text style={s.optText}>{o.label}</Text>
+          <Text style={s.optPrice}>{o.price > 0 ? `+£${o.price.toFixed(2)}` : 'Included'}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
@@ -205,6 +304,23 @@ const s = StyleSheet.create({
   checkboxOn: { backgroundColor: colors.brand, borderColor: colors.brand },
   optText: { flex: 1, ...t.body, color: colors.text },
   optPrice: { ...t.body, color: colors.subText },
+
+  radio: {
+    width: 22, height: 22, borderRadius: 11,
+    borderWidth: 1.5, borderColor: colors.muted,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  radioOn: { borderColor: colors.brand, backgroundColor: 'transparent' },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.brand },
+
+  notesInput: {
+    padding: spacing.base,
+    fontFamily: 'Manrope_400Regular',
+    fontSize: 14,
+    color: colors.text,
+    minHeight: 72,
+    textAlignVertical: 'top',
+  },
 
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,

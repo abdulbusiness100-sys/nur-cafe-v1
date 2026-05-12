@@ -8,6 +8,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/types';
 import { useAuth } from '../context/AuthContext';
 import {
   getUserNotifications,
@@ -21,7 +23,7 @@ import { type as t } from '../theme/typography';
 import { spacing, radius, touchTarget, shadow } from '../theme/spacing';
 
 export default function NotificationsScreen() {
-  const nav = useNavigation();
+  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user } = useAuth();
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +65,12 @@ export default function NotificationsScreen() {
       setNotifs((prev) =>
         prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n)),
       );
+    }
+    // Deep-link to the relevant screen based on notification content
+    if (notif.order_id) {
+      nav.navigate('OrderTracking', { orderId: notif.order_id });
+    } else if ((notif as any).type === 'order_ready') {
+      nav.navigate('OrderHistory');
     }
   };
 

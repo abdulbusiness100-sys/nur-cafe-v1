@@ -10,7 +10,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   FadeInDown, FadeInRight,
@@ -23,6 +22,7 @@ import { featured, menu } from '../data/menu';
 import { resolveImage } from '../utils/imageHelper';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { getUserOrders, ORDER_STATUS_LABELS } from '../services/orders';
 import { supabase } from '../config/supabase';
 import colors from '../theme/colors';
 import { fonts } from '../theme/typography';
@@ -65,13 +65,14 @@ const PROMOS = [
 
 export default function HomeScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { totalItems } = useCart();
 
   const [promoIndex,   setPromoIndex]   = useState(0);
   const [email,        setEmail]        = useState('');
   const [subscribing,  setSubscribing]  = useState(false);
   const [subscribed,   setSubscribed]   = useState(false);
+  const [lastOrder,    setLastOrder]    = useState<any>(null);
 
   // ─── Computed values ───────────────────────────────────────────────────────
   const userName = profile?.name ?? 'Guest';
@@ -102,6 +103,15 @@ export default function HomeScreen() {
     const id = setInterval(() => setPromoIndex((i) => (i + 1) % PROMOS.length), 4000);
     return () => clearInterval(id);
   }, []);
+
+  // ─── Last order fetch ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (user?.id) {
+      getUserOrders(user.id)
+        .then((orders) => { if (orders.length > 0) setLastOrder(orders[0]); })
+        .catch(() => {});
+    }
+  }, [user?.id]);
 
   // ─── Points pill pulse — every 8s ─────────────────────────────────────────
   const pillScale = useSharedValue(1);
@@ -223,6 +233,67 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingBottom: 48 }}
       >
 
+        {/* ── Last Order quick-access card ────────────────────────────── */}
+        {lastOrder && (() => {
+          const status: string = lastOrder.status ?? 'pending';
+          const isActive = status === 'pending' || status === 'preparing' || status === 'ready';
+          const isCancelled = status === 'cancelled';
+          const badgeBg   = isCancelled
+            ? '#F3DEDE'
+            : isActive
+              ? colors.terracotta
+              : colors.creamDeep;
+          const badgeText = isCancelled
+            ? colors.error
+            : isActive
+              ? colors.cream
+              : colors.subText;
+          const firstName = lastOrder.items?.[0]?.name ?? 'Item';
+          const extraCount = (lastOrder.items?.length ?? 1) - 1;
+          const orderDate = lastOrder.created_at
+            ? new Date(lastOrder.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+            : '';
+          const total = lastOrder.final_total != null
+            ? `£${Number(lastOrder.final_total).toFixed(2)}`
+            : '';
+
+          return (
+            <Animated.View entering={FadeInDown.delay(40).springify()}>
+              <TouchableOpacity
+                style={s.lastOrderCard}
+                activeOpacity={0.88}
+                onPress={() => nav.navigate('OrderDetail', { orderId: lastOrder.id })}
+              >
+                {/* Left icon */}
+                <View style={s.lastOrderIconWrap}>
+                  <Ionicons name="cafe" size={20} color={colors.terracotta} />
+                </View>
+
+                {/* Middle content */}
+                <View style={s.lastOrderMiddle}>
+                  <Text style={s.lastOrderLabel}>YOUR LAST ORDER</Text>
+                  <Text style={s.lastOrderItem} numberOfLines={1}>
+                    {firstName}{extraCount > 0 ? ` + ${extraCount} more` : ''}
+                  </Text>
+                  <Text style={s.lastOrderMeta}>
+                    {orderDate}{orderDate && total ? '  ·  ' : ''}{total}
+                  </Text>
+                </View>
+
+                {/* Right: status badge + chevron */}
+                <View style={s.lastOrderRight}>
+                  <View style={[s.lastOrderBadge, { backgroundColor: badgeBg }]}>
+                    <Text style={[s.lastOrderBadgeText, { color: badgeText }]}>
+                      {ORDER_STATUS_LABELS[status as keyof typeof ORDER_STATUS_LABELS] ?? status}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={14} color={colors.muted} style={{ marginTop: 4 }} />
+                </View>
+              </TouchableOpacity>
+            </Animated.View>
+          );
+        })()}
+
         {/* ── "What's new" hero carousel ──────────────────────────────── */}
         <Animated.Text
           entering={FadeInDown.delay(60).springify()}
@@ -330,11 +401,11 @@ export default function HomeScreen() {
             activeOpacity={0.9}
             onPress={() => {
               Haptics.selectionAsync();
-              nav.navigate('Cart');
+              (nav as any).navigate('Order');
             }}
           >
             <Ionicons name="star" size={14} color={colors.cream} />
-            <Text style={s.redeemBtnText}>REDEEM AT CHECKOUT</Text>
+            <Text style={s.redeemBtnText}>START AN ORDER</Text>
           </TouchableOpacity>
         </Animated.View>
 
@@ -371,14 +442,22 @@ export default function HomeScreen() {
           </ScrollView>
         </Animated.View>
 
+        {/* ── View full menu CTA ──────────────────────────────────────── */}
+        <Animated.View entering={FadeInDown.delay(340).springify()}>
+          <TouchableOpacity
+            style={s.menuCta}
+            activeOpacity={0.9}
+            onPress={() => nav.navigate('Order' as any)}
+          >
+            <Ionicons name="cafe" size={20} color={colors.terracotta} />
+            <Text style={s.menuCtaText}>VIEW FULL MENU</Text>
+            <Ionicons name="arrow-forward" size={16} color={colors.terracotta} />
+          </TouchableOpacity>
+        </Animated.View>
+
         {/* ── Newsletter signup ───────────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.delay(340).springify()} style={s.newsletterCard}>
-          <LinearGradient
-            colors={[colors.terracottaDark, colors.terracotta]}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFillObject}
-          />
-          <Ionicons name="mail" size={24} color={colors.cream} style={{ marginBottom: spacing.sm }} />
+        <Animated.View entering={FadeInDown.delay(380).springify()} style={s.newsletterCard}>
+          <Ionicons name="mail" size={20} color={colors.terracotta} style={{ marginBottom: spacing.sm }} />
           <Text style={s.newsletterTitle}>Stay in the loop</Text>
           <Text style={s.newsletterSub}>
             Get exclusive offers, seasonal menus, and events straight to your inbox.
@@ -395,7 +474,7 @@ export default function HomeScreen() {
                 value={email}
                 onChangeText={setEmail}
                 placeholder="your@email.com"
-                placeholderTextColor="rgba(255,255,255,0.45)"
+                placeholderTextColor={colors.muted}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 returnKeyType="done"
@@ -411,20 +490,6 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
           )}
-          <Text style={s.newsletterWatermark}>NŪR</Text>
-        </Animated.View>
-
-        {/* ── View full menu CTA ──────────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.delay(380).springify()}>
-          <TouchableOpacity
-            style={s.menuCta}
-            activeOpacity={0.9}
-            onPress={() => nav.navigate('Order' as any)}
-          >
-            <Ionicons name="cafe" size={20} color={colors.terracotta} />
-            <Text style={s.menuCtaText}>VIEW FULL MENU</Text>
-            <Ionicons name="arrow-forward" size={16} color={colors.terracotta} />
-          </TouchableOpacity>
         </Animated.View>
 
       </ScrollView>
@@ -644,7 +709,7 @@ const s = StyleSheet.create({
     lineHeight:  17,
   },
   promoDots: {
-    flexDirection: 'column',
+    flexDirection: 'row',
     gap:           5,
     alignItems:    'center',
   },
@@ -656,7 +721,7 @@ const s = StyleSheet.create({
   },
   promoDotActive: {
     backgroundColor: colors.terracotta,
-    width:           16,
+    width:           10,
   },
 
   // ─── Loyalty card — glassmorphic treatment ───────────────────────────────
@@ -795,64 +860,122 @@ const s = StyleSheet.create({
   // ─── Newsletter ──────────────────────────────────────────────────────────
   newsletterCard: {
     marginHorizontal: spacing.base,
-    marginTop:        spacing.xl,
-    borderRadius:     radius['2xl'],
-    overflow:         'hidden',
-    padding:          spacing.xl,
-    ...shadow.card,
+    marginTop:        spacing.base,
+    borderRadius:     radius.xl,
+    backgroundColor:  colors.cream,
+    borderWidth:      1,
+    borderColor:      colors.creamDeep,
+    padding:          spacing.base,
   },
   newsletterTitle: {
     fontFamily:   fonts.extrabold,
-    fontSize:     22,
-    color:        colors.cream,
+    fontSize:     16,
+    color:        colors.deepBrown,
     marginBottom: spacing.xs,
   },
   newsletterSub: {
     fontFamily:   fonts.medium,
-    fontSize:     14,
-    color:        'rgba(239,229,216,0.8)',
+    fontSize:     13,
+    color:        colors.subText,
     marginBottom: spacing.base,
-    lineHeight:   22,
+    lineHeight:   20,
   },
   emailRow:     { flexDirection: 'row', gap: spacing.sm },
   emailInput:   {
-    flex:            1,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius:    radius.full,
+    flex:              1,
+    backgroundColor:   colors.creamDeep,
+    borderRadius:      radius.full,
     paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
-    color:           '#FFF',
-    fontFamily:      fonts.regular,
-    fontSize:        14,
-    borderWidth:     1,
-    borderColor:     'rgba(255,255,255,0.25)',
+    paddingVertical:   spacing.md,
+    color:             colors.deepBrown,
+    fontFamily:        fonts.regular,
+    fontSize:          14,
+    borderWidth:       1,
+    borderColor:       colors.creamDeep,
   },
   subscribeBtn: {
-    backgroundColor: colors.cream,
-    borderRadius:    radius.full,
+    backgroundColor:   colors.terracotta,
+    borderRadius:      radius.full,
     paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
-    justifyContent:  'center',
+    paddingVertical:   spacing.md,
+    justifyContent:    'center',
   },
   subscribeBtnText: {
     fontFamily:    fonts.extrabold,
     fontSize:      12,
-    color:         colors.terracotta,
+    color:         colors.cream,
     letterSpacing: 1,
   },
   subscribedRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   subscribedText: {
     fontFamily: fonts.medium,
     fontSize:   14,
-    color:      'rgba(239,229,216,0.9)',
+    color:      colors.subText,
   },
-  newsletterWatermark: {
-    position:   'absolute',
-    right:      spacing.md,
-    bottom:     -8,
-    fontSize:   72,
-    color:      'rgba(255,255,255,0.05)',
-    fontFamily: fonts.amiriBold,
+
+  // ─── Last Order card ─────────────────────────────────────────────────────
+  lastOrderCard: {
+    marginHorizontal: spacing.base,
+    marginTop:        spacing.base,
+    backgroundColor:  colors.cream,
+    borderRadius:     radius.xl,
+    borderWidth:      1,
+    borderColor:      colors.creamDeep,
+    padding:          spacing.md,
+    flexDirection:    'row',
+    alignItems:       'center',
+    gap:              spacing.md,
+    minHeight:        64,
+    maxHeight:        72,
+    ...shadow.sm,
+  },
+  lastOrderIconWrap: {
+    width:           36,
+    height:          36,
+    borderRadius:    radius.lg,
+    backgroundColor: colors.terracotta + '14',
+    alignItems:     'center',
+    justifyContent: 'center',
+    flexShrink:     0,
+  },
+  lastOrderMiddle: {
+    flex:    1,
+    gap:     2,
+  },
+  lastOrderLabel: {
+    fontFamily:    fonts.bold,
+    fontSize:      9,
+    color:         colors.muted,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase' as const,
+  },
+  lastOrderItem: {
+    fontFamily: fonts.bold,
+    fontSize:   13,
+    color:      colors.deepBrown,
+    lineHeight: 17,
+  },
+  lastOrderMeta: {
+    fontFamily: fonts.medium,
+    fontSize:   11,
+    color:      colors.subText,
+    lineHeight: 15,
+  },
+  lastOrderRight: {
+    alignItems:  'flex-end',
+    gap:         2,
+    flexShrink:  0,
+  },
+  lastOrderBadge: {
+    borderRadius:      radius.full,
+    paddingHorizontal: 8,
+    paddingVertical:   3,
+  },
+  lastOrderBadgeText: {
+    fontFamily:    fonts.bold,
+    fontSize:      9,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase' as const,
   },
 
   // ─── Menu CTA ────────────────────────────────────────────────────────────
