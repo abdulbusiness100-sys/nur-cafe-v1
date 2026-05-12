@@ -38,7 +38,6 @@ export default {
     },
     plugins: [
       'expo-secure-store',
-      ['expo-notifications', { icon: './assets/icon.png', color: '#9C5148' }],
       [
         '@stripe/stripe-react-native',
         {
