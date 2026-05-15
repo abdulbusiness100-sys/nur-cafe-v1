@@ -23,6 +23,9 @@ export default {
       bundleIdentifier: IS_DEV ? 'com.nurcafe.app.dev' : 'com.nurcafe.app',
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
+        NSCameraUsageDescription: 'Allow Nur Café to access your camera to scan payment cards.',
+        NSMicrophoneUsageDescription: 'Allow Nur Café to access your microphone for voice features.',
+        NSPhotoLibraryUsageDescription: 'Allow Nur Café to access your photo library.',
       },
     },
     android: {
@@ -38,12 +41,14 @@ export default {
     },
     plugins: [
       'expo-secure-store',
+      'expo-notifications',
       [
         '@stripe/stripe-react-native',
         {
           merchantIdentifier: 'merchant.com.nurcafe.app',
         },
       ],
+      './plugins/withIosPermissions',
     ],
     extra: {
       // These are injected at build time from .env.local or EAS Secrets

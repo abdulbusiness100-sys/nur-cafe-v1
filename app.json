@@ -15,7 +15,13 @@
     "scheme": "nurcafe",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nurcafe.app"
+      "bundleIdentifier": "com.nurcafe.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Allow Nur Cafe to access your camera to scan payment cards.",
+        "NSMicrophoneUsageDescription": "Allow Nur Cafe to access your microphone for voice features.",
+        "NSPhotoLibraryUsageDescription": "Allow Nur Cafe to access your photo library."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -29,12 +35,14 @@
     },
     "plugins": [
       "expo-secure-store",
+      "expo-notifications",
       [
         "@stripe/stripe-react-native",
         {
           "merchantIdentifier": "merchant.com.nurcafe.app"
         }
-      ]
+      ],
+      "./plugins/withIosPermissions"
     ]
   }
 }
