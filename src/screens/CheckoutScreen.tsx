@@ -27,8 +27,10 @@ const LOCATION = {
   address: '45 Deansgate, Manchester M3 2AY',
 };
 
-// 100 loyalty points = £1 off
+// 100 loyalty points = £1 off (redemption rate)
 const POINTS_PER_POUND = 100;
+// 2.5 points earned per £1 spent (earning rate)
+const EARN_RATE = 2.5;
 
 export default function CheckoutScreen({ navigation }: Props) {
   const { items, totalPrice, clearCart } = useCart();
@@ -59,7 +61,7 @@ export default function CheckoutScreen({ navigation }: Props) {
   };
   const userTier      = profile?.tier ?? 'bronze';
   const multiplier    = TIER_MULTIPLIER[userTier] ?? 1.0;
-  const pointsToEarn  = Math.floor(finalTotal * multiplier);
+  const pointsToEarn  = Math.floor(finalTotal * EARN_RATE * multiplier);
 
   const handleApplyGiftCard = async () => {
     const trimmed = gcCode.trim();
