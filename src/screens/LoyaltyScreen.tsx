@@ -1,10 +1,12 @@
 // src/screens/LoyaltyScreen.tsx
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
+import { getUserOrders } from '../services/orders';
 import colors from '../theme/colors';
 import { spacing, radius, shadow } from '../theme/spacing';
 import { type as t } from '../theme/typography';
@@ -19,9 +21,9 @@ const TIERS = {
 type TierKey = keyof typeof TIERS;
 
 const TIER_PERKS: Record<TierKey, string[]> = {
-  bronze: ['Earn 1pt per £1 spent', 'Birthday bonus points', 'Early access to new drinks'],
-  silver: ['Everything in Bronze', '1.25x points multiplier', 'Earn 25% more points on every order'],
-  gold:   ['Everything in Silver', '1.5x points multiplier', 'Free drink on your birthday', 'Exclusive access to new seasonal drinks'],
+  bronze: ['Earn 2.5pts per £1 spent', 'Birthday bonus points', 'Early access to new drinks'],
+  silver: ['Everything in Bronze', '1.25x points multiplier', 'Earn 3.125pts per £1 spent'],
+  gold:   ['Everything in Silver', '1.5x points multiplier', 'Free drink on your birthday', 'Exclusive access to seasonal drinks'],
 };
 
 const TIER_STEPS: { key: TierKey; threshold: number }[] = [
@@ -30,14 +32,42 @@ const TIER_STEPS: { key: TierKey; threshold: number }[] = [
   { key: 'gold',   threshold: 150 },
 ];
 
+type PointsEvent = {
+  id: string;
+  date: string;
+  label: string;
+  earned: number;
+  redeemed: number;
+};
+
 export default function LoyaltyScreen() {
   const nav = useNavigation();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const points   = profile?.points ?? 0;
   const tier     = ((profile?.tier ?? 'bronze') as TierKey);
   const tierCfg  = TIERS[tier];
   const progress = tierCfg.next ? Math.min(points / tierCfg.next, 1) : 1;
   const ptsToNext = tierCfg.next ? tierCfg.next - points : 0;
+
+  const [history, setHistory] = useState<PointsEvent[]>([]);
+  const [histLoading, setHistLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) { setHistLoading(false); return; }
+    getUserOrders(user.id).then((orders) => {
+      const events: PointsEvent[] = orders
+        .filter((o) => ((o as any).total_points ?? 0) > 0 || ((o as any).discount_points ?? 0) > 0)
+        .map((o) => ({
+          id:       o.id,
+          date:     o.created_at,
+          label:    `Order #${o.id.slice(0, 6).toUpperCase()}`,
+          earned:   (o as any).total_points ?? 0,
+          redeemed: (o as any).discount_points ?? 0,
+        }));
+      setHistory(events);
+      setHistLoading(false);
+    });
+  }, [user]);
 
   return (
     <SafeAreaView style={s.safe}>
@@ -163,8 +193,53 @@ export default function LoyaltyScreen() {
           </View>
         </Animated.View>
 
+        {/* Points history */}
+        <Animated.View entering={FadeInDown.delay(340).springify()}>
+          <Text style={s.sectionTitle}>Points history</Text>
+          <View style={s.perksCard}>
+            {histLoading ? (
+              <ActivityIndicator color={colors.brand} style={{ padding: spacing.xl }} />
+            ) : history.length === 0 ? (
+              <View style={[s.perkRow, { justifyContent: 'center' }]}>
+                <Text style={[s.perkText, { color: colors.muted, textAlign: 'center' }]}>
+                  No points activity yet — place your first order to start earning.
+                </Text>
+              </View>
+            ) : (
+              history.slice(0, 10).map((ev, i) => (
+                <View
+                  key={ev.id}
+                  style={[s.perkRow, i < Math.min(history.length, 10) - 1 && s.perkBorder]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.perkText, { fontFamily: 'Manrope_700Bold' }]}>{ev.label}</Text>
+                    <Text style={[s.perkText, { color: colors.muted, fontSize: 12, marginTop: 2 }]}>
+                      {new Date(ev.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                    {ev.earned > 0 && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name="star" size={12} color={colors.warning} />
+                        <Text style={{ fontFamily: 'Manrope_700Bold', fontSize: 13, color: '#065F46' }}>
+                          +{ev.earned} pts
+                        </Text>
+                      </View>
+                    )}
+                    {ev.redeemed > 0 && (
+                      <Text style={{ fontFamily: 'Manrope_500Medium', fontSize: 12, color: colors.muted }}>
+                        −{ev.redeemed} redeemed
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+        </Animated.View>
+
         {/* Start earning CTA */}
-        <Animated.View entering={FadeInDown.delay(360).springify()} style={{ paddingHorizontal: spacing.base, marginTop: spacing.lg }}>
+        <Animated.View entering={FadeInDown.delay(400).springify()} style={{ paddingHorizontal: spacing.base, marginTop: spacing.lg }}>
           <TouchableOpacity
             style={{ backgroundColor: colors.brand, borderRadius: radius.full, paddingVertical: spacing.base, alignItems: 'center' }}
             onPress={() => (nav as any).navigate('Order')}
